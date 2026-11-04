@@ -62,6 +62,82 @@ begin
 end;
 $$;
 
+-- Shortcuts for writing workouts as the current user (they run with the caller's rights, so RLS
+-- and triggers apply exactly as for the app).
+
+create function tests.exercise(p_slug text)
+returns uuid
+language sql
+stable
+as $$
+  select id from public.exercises where slug = p_slug;
+$$;
+
+create function tests.add_activity(
+  p_type public.activity_type,
+  p_local_date date,
+  p_id uuid default gen_random_uuid(),
+  p_bodyweight_kg numeric default null
+)
+returns uuid
+language sql
+as $$
+  insert into public.activities (id, type, local_date, timezone, bodyweight_kg)
+  values (p_id, p_type, p_local_date, 'Europe/Lisbon', p_bodyweight_kg)
+  returning id;
+$$;
+
+create function tests.add_set(
+  p_activity_id uuid,
+  p_slug text,
+  p_weight_kg numeric,
+  p_reps integer,
+  p_set_number integer default 1,
+  p_is_warmup boolean default false
+)
+returns uuid
+language sql
+as $$
+  insert into public.gym_sets (
+    activity_id, exercise_id, exercise_position, set_number, weight_kg, reps, is_warmup
+  )
+  values (
+    p_activity_id, tests.exercise(p_slug), 0, p_set_number, p_weight_kg, p_reps, p_is_warmup
+  )
+  returning id;
+$$;
+
+create function tests.add_swim(
+  p_activity_id uuid,
+  p_stroke public.swim_stroke,
+  p_distance integer,
+  p_pool_length public.pool_length,
+  p_time_cs integer,
+  p_kind public.swim_kind default 'race'
+)
+returns uuid
+language sql
+as $$
+  insert into public.swim_entries (activity_id, stroke, distance, pool_length, time_cs, kind)
+  values (p_activity_id, p_stroke, p_distance, p_pool_length, p_time_cs, p_kind)
+  returning id;
+$$;
+
+-- Starts counting record rebuilds from zero (see private.count_record_rebuild).
+create function tests.reset_rebuild_count()
+returns void
+language sql
+as $$
+  select set_config('treker.record_rebuilds', '0', true);
+$$;
+
+create function tests.rebuild_count()
+returns integer
+language sql
+as $$
+  select coalesce(nullif(current_setting('treker.record_rebuilds', true), ''), '0')::integer;
+$$;
+
 grant execute on all functions in schema tests to anon, authenticated;
 
 -- Two users and one row of every table for each, created as the test runner (bypassing RLS).

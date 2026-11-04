@@ -8,6 +8,7 @@ Este documento explica como estão organizados os dados da v1 (Gym e Natação) 
 - **Preparada para funcionar offline.** Os ids (UUID) podem ser gerados no telemóvel. Assim, reenviar a mesma série durante a sincronização nunca a duplica: o id já existe.
 - **Apagar é marcar.** Nas tabelas de dados, apagar significa preencher `deleted_at`. A linha continua lá para que os outros telemóveis do atleta saibam, na sincronização, que ela foi apagada. Só o servidor apaga linhas a sério (por exemplo, quando se apaga a conta).
 - **Datas de treino são datas locais.** `local_date` é o dia do calendário do atleta, enviado pela app. Nunca se calcula a partir de UTC; um treino às 00:30 em Lisboa fica no dia certo.
+- **Recordes e estatísticas são dados derivados.** Nunca são escritos pela app nem pelos utilizadores. São sempre reconstruídos a partir das séries e dos tempos, por isso editar ou apagar um registo antigo deixa tudo certo (ver [Recordes e estatísticas](#recordes-e-estatísticas)).
 
 ## Tabelas
 
@@ -23,6 +24,9 @@ erDiagram
   activities ||--o{ gym_sets : "séries (gym)"
   activities ||--o{ swim_entries : "tempos (natação)"
   exercises ||--o{ gym_sets : "usado em"
+  gym_sets |o--o| personal_records : "origem (gym)"
+  swim_entries |o--o| personal_records : "origem (natação)"
+  exercises ||--o{ exercise_stats : "resumo por atleta"
 ```
 
 ### `profiles` — o perfil
@@ -43,7 +47,7 @@ Uma linha por utilizador, com o mesmo id da conta (`auth.users.id`). **É criada
 
 Duas famílias na mesma tabela:
 
-- **Biblioteca partilhada** (`owner_id` vazio): 68 exercícios comuns, com `slug` (ex.: `barbell-bench-press`) e nomes em inglês e português. É carregada pelo [`supabase/seed.sql`](../supabase/seed.sql). Os ids são calculados a partir do slug, por isso são iguais em todos os ambientes.
+- **Biblioteca partilhada** (`owner_id` vazio): 68 exercícios comuns, com `slug` (ex.: `barbell-bench-press`) e nomes em inglês e português. Vem numa migração ([`20261104140000_exercise_library.sql`](../supabase/migrations/20261104140000_exercise_library.sql)), por isso também existe em produção. Os ids são calculados a partir do slug e são iguais em todos os ambientes.
 - **Personalizados** (`owner_id` = utilizador): criados pelo atleta. Guardam o nome nas duas colunas de nome e não têm slug.
 
 | Coluna | O que guarda |
@@ -72,6 +76,7 @@ Uma linha por treino, de qualquer modalidade. É a base do calendário, do perfi
 | `title`, `notes` | Título e notas |
 | `visibility` | `private` (por defeito), `followers` ou `public` |
 | `template_id` | Treino guardado que deu origem a esta sessão (só gym) |
+| `bodyweight_kg` | Peso corporal **nesse dia** (privado). Se a app não o enviar, é copiado do perfil quando a atividade é criada. Mudar o peso no perfil depois não altera atividades antigas |
 
 ### `gym_sets` — séries de ginásio
 
@@ -96,9 +101,33 @@ Uma linha por treino, de qualquer modalidade. É a base do calendário, do perfi
 | `splits_cs` | Parciais em centésimos, por ordem (opcional) |
 | `position` | Ordem dentro do treino |
 
+### `personal_records` — histórico de recordes
+
+Cada linha é um momento em que o melhor de sempre de uma **chave** melhorou:
+
+| Modalidade | Chave | Valor | Melhor é |
+| --- | --- | --- | --- |
+| Gym | exercício | 1RM estimado em kg | maior |
+| Natação | estilo + distância + tipo de piscina | tempo em centésimos | menor |
+
+Cada linha guarda o valor, o melhor anterior (`previous_value`), a ordem dentro da chave (`sequence`: 1, 2, 3…), a `local_date`, a atividade e a série (`gym_set_id`) ou o tempo (`swim_entry_id`) que bateu o recorde. Na natação guarda também se foi prova ou treino (`swim_kind`).
+
+A vista **`current_records`** mostra só o melhor atual de cada chave, ou seja, o último recorde do histórico.
+
+### `exercise_stats` — resumo por exercício
+
+Uma linha por atleta e exercício que tenha séries:
+
+| Coluna | O que guarda |
+| --- | --- |
+| `best_one_rep_max_kg` | Melhor 1RM estimado (igual ao recorde atual) |
+| `total_volume_kg` | Soma de peso × reps das séries de trabalho. A assistência (peso negativo) conta como zero |
+| `set_count` | Número de séries de trabalho (sem aquecimentos) |
+| `last_local_date` | Dia do último treino com este exercício |
+
 ### Colunas comuns
 
-Todas as tabelas de dados do utilizador têm:
+Todas as tabelas de dados do utilizador (não as derivadas) têm:
 
 - `id`: UUID, que pode ser gerado no telemóvel.
 - `user_id` (ou `owner_id` nos exercícios): o dono da linha.
@@ -117,6 +146,7 @@ O `id` de uma linha nunca muda depois de criada.
 | `exercises` (biblioteca) | Todos os utilizadores com sessão | Ninguém pela API | Ninguém pela API | Ninguém |
 | `exercises` (personalizados) | Só o dono | Só para si próprio | Só o dono | Ninguém (usa `deleted_at`) |
 | Restantes tabelas | Só o dono | Só para si próprio | Só o dono | Ninguém (usa `deleted_at`) |
+| `personal_records`, `exercise_stats`, `current_records` | Só o dono | Ninguém (só o servidor) | Ninguém | Ninguém |
 
 - **Visitantes sem sessão (chave `anon`) não leem nem escrevem nada.**
 - Todas as tabelas têm RLS (Row Level Security) ativo, com uma política explícita para cada operação. Um teste falha se alguma tabela nova ficar sem RLS.
@@ -141,6 +171,41 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
+## Recordes e estatísticas
+
+### 1RM (peso real ou fórmula de Epley)
+
+```
+1 rep:        1RM = peso                              (é um valor real, não uma estimativa)
+2 a 12 reps:  1RM = (peso + pc) × (1 + reps / 30) − pc
+```
+
+`pc` é o peso corporal da atividade se o exercício tiver `adds_bodyweight`, senão é 0. Nas elevações e nos dips o 1RM fica em **peso adicionado**: 20 kg × 5 com 70 kg de peso corporal dá 35 kg, e uma elevação assistida pode dar um valor negativo. O resultado é arredondado a 0,01 kg, com as meias casas a afastarem-se do zero.
+
+**Só conta** uma série que cumpra todas estas condições:
+- não está apagada, e a atividade também não;
+- não é aquecimento;
+- o exercício tem `tracks_load` e `unit = reps`;
+- tem entre 1 e 12 repetições (acima disso a fórmula deixa de ser fiável);
+- tem peso, ou, nos exercícios com peso corporal, a atividade tem peso corporal.
+
+A mesma fórmula existe na app em [`src/core/records`](../src/core/records/), para mostrar um recorde novo na hora, mesmo offline. As duas versões são testadas contra o mesmo ficheiro de casos, [`supabase/tests/fixtures/one-rep-max-cases.json`](../supabase/tests/fixtures/one-rep-max-cases.json), pelo Jest e pelo pgTAP. Se alguém mudar uma sem a outra, os testes falham.
+
+### Natação
+
+Contam todas as entradas não apagadas, de prova e de treino. Piscinas de 25 m, 50 m e 25 jardas nunca se misturam, nem os estilos.
+
+### Como é reconstruído
+
+- **Reconstruir uma chave** apaga os recordes dessa chave e percorre o histórico por ordem (`local_date`, `started_at`, ordem do exercício, `set_number`). Grava um recorde sempre que o melhor anterior é batido. No gym recalcula também as `exercise_stats`.
+- **Triggers por instrução** em `gym_sets` e `swim_entries` juntam as chaves tocadas por cada insert, update ou delete e reconstroem cada chave **uma só vez por instrução**, mesmo que a instrução mexa em 50 séries. Alterações que não afetam recordes (como o RPE) não reconstroem nada.
+- **Também reconstrói quando:**
+  - uma atividade muda de `local_date`, `started_at` ou `bodyweight_kg`, ou é apagada;
+  - um exercício muda de `unit`, `tracks_load` ou `adds_bodyweight`.
+- **Gravações em simultâneo:** cada reconstrução pede um bloqueio por utilizador (`pg_advisory_xact_lock`) que dura até ao fim da transação. Duas gravações do mesmo atleta ao mesmo tempo esperam uma pela outra, e a segunda já vê os dados da primeira. Por isso nunca há recordes duplicados.
+
+Por isso, corrigir um tempo impossível (por exemplo 15,00 nos 50 m) faz reaparecer os recordes verdadeiros que vieram depois. E mudar o peso no perfil não reescreve recordes antigos, porque cada atividade guarda o peso do seu dia.
+
 ## Índices
 
 | Para quê | Índice |
@@ -150,6 +215,7 @@ As funções dos triggers vivem no schema `private`, que não está exposto pela
 | Histórico de um exercício | `gym_sets (user_id, exercise_id)` |
 | Melhores tempos por prova | `swim_entries (user_id, stroke, distance, pool_length)` |
 | Sincronização ("o que mudou desde...") | `(user_id, updated_at)` em todas as tabelas de dados |
+| Reconstruir e mostrar recordes de uma chave | `personal_records (user_id, exercise_id, sequence)` e `(user_id, stroke, distance, pool_length, sequence)` |
 
 ## Comandos
 
@@ -175,5 +241,5 @@ O Studio local fica em http://127.0.0.1:54323.
 
 ## Por fazer
 
-- A biblioteca de exercícios está no `seed.sql`, que só corre localmente. Antes de lançar, tem de passar para uma migração, ou ser carregada uma vez em produção.
-- O cálculo de recordes (`personal_records`, `user_stats`) e a função `save_gym_session` chegam no passo 3b.
+- A função `save_gym_session` (gravar uma sessão inteira numa só chamada) e os totais semanais.
+- Quando houver muitos dados, medir com `explain` o custo da reconstrução de uma chave com histórico longo.

@@ -1,0 +1,262 @@
+[
+  {
+    "name": "5 reps",
+    "input": {
+      "weightKg": 100,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 116.67
+  },
+  {
+    "name": "a single rep is the weight itself, not an estimate",
+    "input": {
+      "weightKg": 100,
+      "reps": 1,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 100
+  },
+  {
+    "name": "2 reps goes through the formula",
+    "input": {
+      "weightKg": 100,
+      "reps": 2,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 106.67
+  },
+  {
+    "name": "a single weighted pull-up is the added weight",
+    "input": {
+      "weightKg": 20,
+      "reps": 1,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": 70
+    },
+    "expected": 20
+  },
+  {
+    "name": "a single pull-up at bodyweight is zero added weight",
+    "input": {
+      "weightKg": null,
+      "reps": 1,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": 70
+    },
+    "expected": 0
+  },
+  {
+    "name": "fractional plates",
+    "input": {
+      "weightKg": 102.5,
+      "reps": 3,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 112.75
+  },
+  {
+    "name": "weight converted from lb is rounded to 0.01 kg",
+    "input": {
+      "weightKg": 102.058,
+      "reps": 1,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 102.06
+  },
+  {
+    "name": "rounds half away from zero",
+    "input": {
+      "weightKg": 6.03,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 7.04
+  },
+  {
+    "name": "12 reps is the last that counts",
+    "input": {
+      "weightKg": 60,
+      "reps": 12,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": 84
+  },
+  {
+    "name": "13 reps does not count",
+    "input": {
+      "weightKg": 60,
+      "reps": 13,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": null
+  },
+  {
+    "name": "zero reps does not count",
+    "input": {
+      "weightKg": 60,
+      "reps": 0,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": null
+  },
+  {
+    "name": "warm-up does not count",
+    "input": {
+      "weightKg": 100,
+      "reps": 5,
+      "isWarmup": true,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": null
+    },
+    "expected": null
+  },
+  {
+    "name": "exercise measured in seconds does not count",
+    "input": {
+      "weightKg": null,
+      "reps": null,
+      "isWarmup": false,
+      "unit": "seconds",
+      "tracksLoad": false,
+      "addsBodyweight": false,
+      "bodyweightKg": 70
+    },
+    "expected": null
+  },
+  {
+    "name": "exercise without load does not count",
+    "input": {
+      "weightKg": null,
+      "reps": 15,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": false,
+      "addsBodyweight": false,
+      "bodyweightKg": 70
+    },
+    "expected": null
+  },
+  {
+    "name": "loaded exercise without weight does not count",
+    "input": {
+      "weightKg": null,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": 70
+    },
+    "expected": null
+  },
+  {
+    "name": "pull-up with added weight",
+    "input": {
+      "weightKg": 20,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": 70
+    },
+    "expected": 35
+  },
+  {
+    "name": "pull-up at bodyweight (no weight entered)",
+    "input": {
+      "weightKg": null,
+      "reps": 10,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": 70
+    },
+    "expected": 23.33
+  },
+  {
+    "name": "assisted pull-up gives a negative added-weight 1RM",
+    "input": {
+      "weightKg": -20,
+      "reps": 8,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": 80
+    },
+    "expected": -4
+  },
+  {
+    "name": "bodyweight exercise without a known bodyweight does not count",
+    "input": {
+      "weightKg": 20,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": true,
+      "bodyweightKg": null
+    },
+    "expected": null
+  },
+  {
+    "name": "bodyweight is ignored for exercises that do not add it",
+    "input": {
+      "weightKg": 100,
+      "reps": 5,
+      "isWarmup": false,
+      "unit": "reps",
+      "tracksLoad": true,
+      "addsBodyweight": false,
+      "bodyweightKg": 70
+    },
+    "expected": 116.67
+  }
+]

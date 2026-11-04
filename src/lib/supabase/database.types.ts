@@ -25,6 +25,7 @@ export type Database = {
     Tables: {
       activities: {
         Row: {
+          bodyweight_kg: number | null;
           created_at: string;
           deleted_at: string | null;
           ended_at: string | null;
@@ -42,6 +43,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          bodyweight_kg?: number | null;
           created_at?: string;
           deleted_at?: string | null;
           ended_at?: string | null;
@@ -58,6 +60,7 @@ export type Database = {
           visibility?: Database['public']['Enums']['visibility'];
         };
         Update: {
+          bodyweight_kg?: number | null;
           created_at?: string;
           deleted_at?: string | null;
           ended_at?: string | null;
@@ -80,6 +83,45 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'workout_templates';
             referencedColumns: ['id', 'user_id'];
+          },
+        ];
+      };
+      exercise_stats: {
+        Row: {
+          best_one_rep_max_kg: number | null;
+          exercise_id: string;
+          last_local_date: string | null;
+          set_count: number;
+          total_volume_kg: number;
+          updated_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          best_one_rep_max_kg?: number | null;
+          exercise_id: string;
+          last_local_date?: string | null;
+          set_count?: number;
+          total_volume_kg?: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          best_one_rep_max_kg?: number | null;
+          exercise_id?: string;
+          last_local_date?: string | null;
+          set_count?: number;
+          total_volume_kg?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'exercise_stats_exercise_id_fkey';
+            columns: ['exercise_id'];
+            isOneToOne: false;
+            referencedRelation: 'exercises';
+            referencedColumns: ['id'];
           },
         ];
       };
@@ -198,6 +240,93 @@ export type Database = {
             columns: ['exercise_id'];
             isOneToOne: false;
             referencedRelation: 'exercises';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      personal_records: {
+        Row: {
+          activity_id: string;
+          created_at: string;
+          distance: number | null;
+          exercise_id: string | null;
+          gym_set_id: string | null;
+          id: string;
+          local_date: string;
+          pool_length: Database['public']['Enums']['pool_length'] | null;
+          previous_value: number | null;
+          sequence: number;
+          stroke: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id: string | null;
+          swim_kind: Database['public']['Enums']['swim_kind'] | null;
+          type: Database['public']['Enums']['activity_type'];
+          user_id: string;
+          value: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          created_at?: string;
+          distance?: number | null;
+          exercise_id?: string | null;
+          gym_set_id?: string | null;
+          id?: string;
+          local_date: string;
+          pool_length?: Database['public']['Enums']['pool_length'] | null;
+          previous_value?: number | null;
+          sequence: number;
+          stroke?: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id?: string | null;
+          swim_kind?: Database['public']['Enums']['swim_kind'] | null;
+          type: Database['public']['Enums']['activity_type'];
+          user_id: string;
+          value: number;
+        };
+        Update: {
+          activity_id?: string;
+          created_at?: string;
+          distance?: number | null;
+          exercise_id?: string | null;
+          gym_set_id?: string | null;
+          id?: string;
+          local_date?: string;
+          pool_length?: Database['public']['Enums']['pool_length'] | null;
+          previous_value?: number | null;
+          sequence?: number;
+          stroke?: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id?: string | null;
+          swim_kind?: Database['public']['Enums']['swim_kind'] | null;
+          type?: Database['public']['Enums']['activity_type'];
+          user_id?: string;
+          value?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'personal_records_activity_id_fkey';
+            columns: ['activity_id'];
+            isOneToOne: false;
+            referencedRelation: 'activities';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_exercise_id_fkey';
+            columns: ['exercise_id'];
+            isOneToOne: false;
+            referencedRelation: 'exercises';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_gym_set_id_fkey';
+            columns: ['gym_set_id'];
+            isOneToOne: true;
+            referencedRelation: 'gym_sets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_swim_entry_id_fkey';
+            columns: ['swim_entry_id'];
+            isOneToOne: true;
+            referencedRelation: 'swim_entries';
             referencedColumns: ['id'];
           },
         ];
@@ -396,7 +525,56 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      current_records: {
+        Row: {
+          activity_id: string;
+          distance: number | null;
+          exercise_id: string | null;
+          gym_set_id: string | null;
+          id: string;
+          local_date: string;
+          pool_length: Database['public']['Enums']['pool_length'] | null;
+          previous_value: number | null;
+          sequence: number;
+          stroke: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id: string | null;
+          swim_kind: Database['public']['Enums']['swim_kind'] | null;
+          type: Database['public']['Enums']['activity_type'];
+          user_id: string;
+          value: number;
+        };
+        ComputedFields: never;
+        Relationships: [
+          {
+            foreignKeyName: 'personal_records_activity_id_fkey';
+            columns: ['activity_id'];
+            isOneToOne: false;
+            referencedRelation: 'activities';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_exercise_id_fkey';
+            columns: ['exercise_id'];
+            isOneToOne: false;
+            referencedRelation: 'exercises';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_gym_set_id_fkey';
+            columns: ['gym_set_id'];
+            isOneToOne: true;
+            referencedRelation: 'gym_sets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'personal_records_swim_entry_id_fkey';
+            columns: ['swim_entry_id'];
+            isOneToOne: true;
+            referencedRelation: 'swim_entries';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
     Functions: {
       [_ in never]: never;

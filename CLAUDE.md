@@ -11,6 +11,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 - **Business logic lives in `src/core`, with tests.** Calculations, validation and PR rules are pure TypeScript (no React or React Native). Screens only display data and call that logic.
 - **Data and security rules live in Postgres** (RLS, functions), not only in the app. Everything the app checks must also be enforced in the database.
 - **Workout dates are stored as the athlete's local date**, never derived from UTC.
+- **Records and stats are derived data** (`personal_records`, `exercise_stats`): only the Postgres rebuild triggers write them; the app never does. The 1RM formula exists in both `src/core/records` and Postgres; change both together and keep `supabase/tests/fixtures/one-rep-max-cases.json` as the single source of test cases.
 - **No secrets in the app code.** Only the public Supabase (anon) key, via `EXPO_PUBLIC_` environment variables.
 - **Code and comments in English.** UI strings live in the `en` and `pt` dictionaries in `src/core/i18n` and are read with `useI18n()` from `src/lib/i18n`; never hard-code user-facing text. Dev-only screens are the exception.
 - **Before calling a task done, run `npm run lint`, `npm run typecheck` and `npm test`.**
