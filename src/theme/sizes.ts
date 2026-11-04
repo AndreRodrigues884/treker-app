@@ -3,6 +3,8 @@ export const sizes = {
   minTouch: 44,
   control: 48,
   chip: 36,
+  // Floating action button (Material guidance: 56 dp).
+  fab: 56,
   progressBar: 8,
   border: 1,
   // Max content width so screens don't stretch on tablets.

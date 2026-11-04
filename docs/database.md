@@ -179,6 +179,18 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
+### Apagar conta
+
+`public.delete_my_account()` é a única função que a app chama diretamente (por `rpc`):
+
+- É `security definer`, com `search_path` vazio e fixo.
+- Só pode ser executada por `authenticated`; o anónimo não pode.
+- Não recebe parâmetros: apaga **apenas** o utilizador de `auth.uid()`, e sem sessão dá erro.
+- Apaga a linha de `auth.users`. Tudo o resto desaparece por cascata, na mesma transação: perfil, exercícios personalizados, treinos guardados, atividades, séries, tempos, recordes e estatísticas.
+- A biblioteca partilhada e os dados dos outros utilizadores não são tocados (testes em `supabase/tests/13_delete_account.sql`).
+
+Quando houver Storage (avatares, imagens), apagar a conta também tem de apagar os ficheiros da pasta do utilizador.
+
 ## Recordes e estatísticas
 
 ### 1RM (peso real ou fórmula de Epley)

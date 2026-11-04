@@ -43,6 +43,24 @@ export async function completeOnboarding(
   if (error) throw error;
 }
 
+// Saves answers edited in the profile. buildProfileUpdate already checked they are complete for
+// the chosen sports; Postgres checks again (profiles_onboarding_complete).
+export async function updateProfileAnswers(
+  userId: string,
+  update: OnboardingProfileUpdate,
+): Promise<void> {
+  const { error } = await supabase.from('profiles').update(update).eq('id', userId);
+  if (error) throw error;
+}
+
+// Deletes the signed-in user's account and all their data (Postgres delete_my_account, which
+// only ever deletes auth.uid()), then forgets the session on this phone.
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  await supabase.auth.signOut({ scope: 'local' });
+}
+
 // The onboarding choices of a saved profile, or null before onboarding.
 export function profileChoices(profile: Profile): OnboardingChoices | null {
   if (profile.onboarded_at === null || profile.sports === null || profile.weekly_target === null) {

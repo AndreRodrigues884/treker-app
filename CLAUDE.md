@@ -19,11 +19,19 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 ## UI conventions
 
 - Dark mode only in v1. Every color, font, size, spacing and radius comes from `src/theme`; no loose values in components.
-- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`). Review them in the dev-only catalog at `/dev/components`.
+- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`, `OptionCard`, `Stepper`, `EmptyState`, `ListRow`). Review them in the dev-only catalog at `/dev/components`.
 - Icons: Lucide only (`lucide-react-native`), rendered through `Icon`. Never emoji as icons.
 - Fonts: Geist for text, Geist Mono (`AppText variant="numeric"`) for times, weights and reps.
 - Numbers shown to the user go through `src/core/format` (weights, swim times in centiseconds, distances).
 - Accessibility: role and label on every control, touch targets of at least 44 pt, text scales with the system font size.
+
+## Navigation
+
+- Route groups: `(auth)` (intro, email, code), `(onboarding)`, `(app)`; the root `Stack.Protected` guards in `src/features/auth/root-navigator.tsx` decide which is open. "Signed in" only counts once the profile has loaded, so (app) never mounts for a moment and unmounts again.
+- Inside `(app)`: the main screens (Today, Calendar, Records, Profile) live in a side menu, `src/app/(app)/(drawer)/` (Drawer from `expo-router/drawer`, with `DrawerContent` and `MenuButton` from `src/features/navigation`). Other screens (`start` as a modal, `settings/*`, `dev/*`) are pushed on the `(app)` Stack.
+- Main screens use `<Screen belowHeader floating={<StartWorkoutButton />}>`: the drawer header covers the top safe area, and the floating "+" opens `/start`.
+- **A navigator's list of screens never changes at runtime.** Never register screens conditionally (or behind a profile value); show or hide content instead. Only the three root groups are opened and closed, by `Stack.Protected`.
+- Tests render the real routes with `test-utils/render-app.tsx`, listed in file (alphabetical) order like on the phone. Reanimated needs the chained resolver in `test-utils/jest-resolver.js` and `setUpTests()` in `jest.setup.ts`.
 
 ## Folder structure
 
@@ -50,7 +58,7 @@ npm run db:test     # pgTAP tests in supabase/tests
 npm run db:types    # regenerate src/lib/supabase/database.types.ts
 ```
 
-Sign-in, session and route protection: see [docs/auth.md](docs/auth.md). Screen tests mock the Supabase client with `test-utils/supabase-mock.ts` and render the real routes with `test-utils/render-app.tsx`.
+Sign-in, session, route protection, profile settings and account deletion: see [docs/auth.md](docs/auth.md). External links (privacy policy, contact) live only in `src/lib/links.ts`. Screen tests mock the Supabase client with `test-utils/supabase-mock.ts` and render the real routes with `test-utils/render-app.tsx`.
 
 Database changes: read [docs/database.md](docs/database.md) first and follow its "Ao acrescentar uma tabela" checklist. After changing migrations, run `db:reset`, `db:test` and `db:types`.
 

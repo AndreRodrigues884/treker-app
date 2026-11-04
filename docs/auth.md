@@ -106,7 +106,16 @@ As rotas estão em três grupos, protegidos com `Stack.Protected` (a forma recom
 | Com sessão, sem onboarding | `(onboarding)` | `/onboarding` |
 | Com sessão e onboarding feito | `(app)` | `/`, … |
 
-Quando a sessão ou o perfil mudam, o router leva o atleta para o grupo certo (`redirectTo`). O ecrã de arranque (splash) fica visível até as fontes, a sessão guardada e a indicação de que a apresentação já foi vista estarem carregadas, para nunca aparecer por instantes o ecrã errado.
+Quando a sessão ou o perfil mudam, o router leva o atleta para o grupo certo (`redirectTo`). **Só conta como "com sessão" depois de o perfil chegar**: logo a seguir ao código, a sessão chega antes do perfil. Se a app abrisse nesse intervalo, os seus ecrãs montavam e desmontavam logo a seguir para quem ainda precisa do onboarding, e isso deixava ações de navegação sem destino (o erro "ROUTE_NAMES_CHANGED … was not handled"). Até o perfil chegar, o atleta fica no ecrã do código; no arranque, o splash cobre esse tempo.
+
+Dentro da app, os ecrãs principais (Hoje, Calendário, Recordes e Perfil) estão num menu lateral (Drawer do Expo Router), em [`src/app/(app)/(drawer)/_layout.tsx`](../src/app/(app)/(drawer)/_layout.tsx):
+- abre com o botão de menu no cabeçalho ou a deslizar a partir da borda esquerda;
+- o item ativo fica destacado com a cor de acento;
+- no topo tem o logótipo, o nome e o objetivo semanal, e no fundo a versão.
+
+Começar um treino é o botão flutuante "+", no canto inferior direito de cada ecrã principal. Abre `/start` em modal, só com as modalidades escolhidas.
+
+A lista de ecrãs de cada navegador é sempre a mesma; o perfil muda o que eles mostram, nunca que rotas existem. A exceção são os três grupos de topo, que o `Stack.Protected` abre e fecha de propósito. O ecrã de arranque (splash) fica visível até as fontes, a sessão guardada e a indicação de que a apresentação já foi vista estarem carregadas, para nunca aparecer por instantes o ecrã errado.
 
 Isto só decide a navegação. **Os dados estão protegidos no Postgres** (RLS), não pelas rotas.
 
@@ -123,6 +132,24 @@ Isto só decide a navegação. **Os dados estão protegidos no Postgres** (RLS),
 - **Terminar sessão** apaga a sessão deste telemóvel, mesmo sem rede.
 
 **Limitação até ao passo 6 (offline):** se o perfil não carregar (por exemplo, sem rede), o atleta entra na app e o onboarding volta a ser verificado no arranque seguinte.
+
+## Perfil: editar respostas e língua
+
+- No ecrã **Perfil** (no menu lateral), cada resposta do questionário abre a mesma pergunta (`/settings/edit?step=…`), com a mesma validação de [`src/core/onboarding`](../src/core/onboarding/).
+- **Acrescentar uma modalidade** faz as perguntas dela antes de gravar. Por exemplo, acrescentar natação pergunta o estilo e a piscina. Assim o perfil cumpre sempre as regras de consistência do Postgres. Retirar uma modalidade apaga as respostas dela.
+- **Língua da app** (`/settings/language`): automática (a do telemóvel), inglês ou português. Fica guardada no telemóvel (`treker.language`) e aplica-se logo.
+- **Ligações de apoio** ("Política de privacidade" e "Contactar"): os endereços estão num só sítio, [`src/lib/links.ts`](../src/lib/links.ts), e **ainda são provisórios**.
+
+## Apagar conta
+
+No Perfil, "Apagar conta" abre um ecrã (`/settings/delete-account`) que:
+
+1. Explica o que se perde, para sempre: treinos, séries e tempos; recordes e estatísticas; o perfil, os objetivos e os exercícios personalizados.
+2. Pede para escrever **APAGAR** (ou **DELETE** em inglês). O botão só fica ativo com a palavra certa, sem contar maiúsculas nem espaços à volta. A regra é `isDeleteConfirmed` em [`src/core/account`](../src/core/account/), com testes.
+3. Chama a função Postgres `delete_my_account()` (ver [database.md](database.md#apagar-conta)). Ela apaga o utilizador de `auth.uid()` e, por cascata, todos os dados dele.
+4. Esquece a sessão neste telemóvel, e o router leva ao ecrã do email.
+
+Se não houver rede, a conta **não** é apagada: aparece o erro e o atleta pode tentar outra vez.
 
 ## Configuração
 
@@ -177,7 +204,9 @@ Em produção (passo 4b) é preciso um serviço de email a sério (SMTP) e os me
   - `__tests__/auth/`: código errado, sem rede e formato inválido; reenviar bloqueado durante 60 s; encaminhamento (apresentação, email, questionário, app); terminar sessão.
   - `__tests__/intro/`: indicador de página, "Saltar", os dois botões finais, e reduzir movimento.
   - `__tests__/onboarding/`: perguntas condicionais, resposta em falta, retoma a meio, o ecrã final, a gravação de uma só vez e a falha de rede.
+  - `__tests__/app/`: o menu lateral (itens, item ativo, botão de menu em cada ecrã principal) e os estados vazios; o botão flutuante "+" só com as modalidades escolhidas; a navegação não abre a app antes de o perfil chegar; editar o perfil (validação, acrescentar e retirar modalidades); a língua; e apagar conta (a confirmação escrita antes de chamar a função, e a falha de rede).
 - `supabase/tests/12_profile_onboarding.sql`: as regras de consistência das respostas e as permissões.
+- `supabase/tests/13_delete_account.sql`: apagar a própria conta e todos os dados, sem tocar nos outros utilizadores; o anónimo não pode chamar a função.
 
 ## Ver a apresentação outra vez (desenvolvimento)
 

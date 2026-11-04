@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { Validation } from '../auth';
 import type { Language } from '../i18n';
-import { parseDecimal, toKilograms, type WeightUnit } from '../units';
+import { fromKilograms, parseDecimal, toKilograms, type WeightUnit } from '../units';
 
 export type { WeightUnit };
 export type Sport = 'gym' | 'swim';
@@ -206,6 +206,59 @@ export function resumeDraft(saved: unknown, defaults: OnboardingAnswers): Onboar
   let index = savedIndex === -1 ? steps.length - 1 : savedIndex;
   if (firstIncomplete !== -1 && firstIncomplete < index) index = firstIncomplete;
   return { step: steps[index], answers };
+}
+
+// Editing in the profile -------------------------------------------------------------------------
+
+// The profile columns the answers come from (snake_case, as stored).
+export type ProfileAnswersSource = {
+  display_name: string | null;
+  sports: Sport[] | null;
+  gym_focus: GymFocus | null;
+  swim_style: SwimStyle | null;
+  default_pool_length: PoolLength | null;
+  pool_unit: PoolUnit;
+  weekly_target: number | null;
+  weight_unit: WeightUnit;
+  bodyweight_kg: number | null;
+};
+
+// The saved answers as questionnaire answers, so the profile edits them with the same questions
+// and validation. Missing values fall back to the defaults.
+export function answersFromProfile(
+  profile: ProfileAnswersSource,
+  defaults: OnboardingAnswers,
+): OnboardingAnswers {
+  return {
+    displayName: profile.display_name ?? '',
+    sports: profile.sports ?? [],
+    gymFocus: profile.gym_focus,
+    swimStyle: profile.swim_style,
+    poolLength: profile.default_pool_length ?? (profile.pool_unit === 'yd' ? '25yd' : '25m'),
+    weeklyTarget: profile.weekly_target ?? defaults.weeklyTarget,
+    weightUnit: profile.weight_unit,
+    bodyweight:
+      profile.bodyweight_kg === null
+        ? ''
+        : String(fromKilograms(profile.bodyweight_kg, profile.weight_unit)),
+  };
+}
+
+// Questions that appear after a change but not before it (adding swimming adds the swim style and
+// pool questions), in questionnaire order. The profile asks them before saving.
+export function addedSteps(
+  before: Pick<OnboardingAnswers, 'sports'>,
+  after: Pick<OnboardingAnswers, 'sports'>,
+): Exclude<StepId, 'summary'>[] {
+  const previous = visibleSteps(before);
+  return visibleSteps(after).filter(
+    (step): step is Exclude<StepId, 'summary'> => step !== 'summary' && !previous.includes(step),
+  );
+}
+
+// The questions that can be edited from the profile (everything but the summary).
+export function isEditableStep(value: unknown): value is Exclude<StepId, 'summary'> {
+  return typeof value === 'string' && value !== 'summary' && STEP_ORDER.includes(value as StepId);
 }
 
 // Saving -----------------------------------------------------------------------------------------

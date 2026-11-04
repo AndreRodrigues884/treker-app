@@ -4,8 +4,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { renderRouter } from 'expo-router/testing-library';
 
+import DrawerLayout from '@/app/(app)/(drawer)/_layout';
+import CalendarScreen from '@/app/(app)/(drawer)/calendar';
+import TodayScreen from '@/app/(app)/(drawer)/index';
+import ProfileScreen from '@/app/(app)/(drawer)/profile';
+import RecordsScreen from '@/app/(app)/(drawer)/records';
 import AppLayout from '@/app/(app)/_layout';
-import HomeScreen from '@/app/(app)/index';
+import DeleteAccountScreen from '@/app/(app)/settings/delete-account';
+import EditAnswerScreen from '@/app/(app)/settings/edit';
+import LanguageScreen from '@/app/(app)/settings/language';
+import StartWorkoutScreen from '@/app/(app)/start';
 import AuthLayout from '@/app/(auth)/_layout';
 import SignInScreen from '@/app/(auth)/sign-in';
 import VerifyCodeScreen from '@/app/(auth)/verify';
@@ -15,15 +23,18 @@ import OnboardingScreen from '@/app/(onboarding)/onboarding';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { RootNavigator } from '@/features/auth/root-navigator';
 import { IntroProvider } from '@/features/intro/intro-state';
+import { LanguageProvider } from '@/lib/i18n';
 import { storageKeys } from '@/lib/storage';
 
 function RootLayout() {
   return (
-    <IntroProvider>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </IntroProvider>
+    <LanguageProvider>
+      <IntroProvider>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </IntroProvider>
+    </LanguageProvider>
   );
 }
 
@@ -46,7 +57,16 @@ export function renderApp(initialUrl = '/') {
       '(onboarding)/_layout': OnboardingLayout,
       '(onboarding)/onboarding': OnboardingScreen,
       '(app)/_layout': AppLayout,
-      '(app)/index': HomeScreen,
+      // In file order (alphabetical), as on the phone; the drawer declares its own order.
+      '(app)/(drawer)/_layout': DrawerLayout,
+      '(app)/(drawer)/calendar': CalendarScreen,
+      '(app)/(drawer)/index': TodayScreen,
+      '(app)/(drawer)/profile': ProfileScreen,
+      '(app)/(drawer)/records': RecordsScreen,
+      '(app)/start': StartWorkoutScreen,
+      '(app)/settings/edit': EditAnswerScreen,
+      '(app)/settings/language': LanguageScreen,
+      '(app)/settings/delete-account': DeleteAccountScreen,
     },
     { initialUrl },
   );

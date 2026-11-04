@@ -38,33 +38,21 @@ describe('route protection', () => {
     expect(screen).toHavePathname('/onboarding');
   });
 
-  it('sends an onboarded user to the app, which shows the saved choices', async () => {
-    resetSupabaseMock({
-      signedIn: true,
-      profile: onboardedProfile({
-        sports: ['gym', 'swim'],
-        swim_style: 'fitness',
-        default_pool_length: '50m',
-      }),
-    });
+  it('sends an onboarded user to the app, on the Today tab', async () => {
+    resetSupabaseMock({ signedIn: true, profile: onboardedProfile() });
     await resetStorage();
     await renderApp('/sign-in');
 
     expect(screen).toHavePathname('/');
-    expect(screen.getByText('Hi, Ana')).toBeOnTheScreen();
-    expect(screen.getByText('Gym, Swimming')).toBeOnTheScreen();
-    expect(screen.getByText(en.onboarding.gymFocus.strength)).toBeOnTheScreen();
-    expect(screen.getByText(en.onboarding.swimStyle.fitness)).toBeOnTheScreen();
-    expect(screen.getByText('50 m · Long course')).toBeOnTheScreen();
-    expect(screen.getByText('3 a week')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Hi, Ana' })).toBeOnTheScreen();
   });
 
   it('signing out opens the email screen, not the intro', async () => {
     resetSupabaseMock({ signedIn: true, profile: onboardedProfile() });
     await resetStorage({ introSeen: true });
-    await renderApp('/');
+    await renderApp('/profile');
 
-    await fireEvent.press(screen.getByRole('button', { name: en.home.signOut }));
+    await fireEvent.press(screen.getByRole('button', { name: en.profile.signOut }));
 
     expect(supabaseMock.auth.signOut).toHaveBeenCalled();
     expect(screen).toHavePathname('/sign-in');

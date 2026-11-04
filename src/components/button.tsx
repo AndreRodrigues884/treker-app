@@ -4,7 +4,8 @@ import { AppText } from '@/components/app-text';
 import { Icon, type LucideIcon } from '@/components/icon';
 import { colors, fontFamilies, opacity, radii, sizes, spacing, type ColorToken } from '@/theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+// danger: irreversible actions such as deleting the account.
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 export type ButtonProps = {
   label: string;
@@ -22,6 +23,7 @@ const contentColor: Record<ButtonVariant, ColorToken> = {
   primary: 'onAccent',
   secondary: 'text',
   ghost: 'gym',
+  danger: 'onAccent',
 };
 
 export function Button({
@@ -89,6 +91,9 @@ const styles = StyleSheet.create({
   ghost: {
     backgroundColor: 'transparent',
     paddingHorizontal: spacing[3],
+  },
+  danger: {
+    backgroundColor: colors.danger,
   },
   fullWidth: {
     alignSelf: 'stretch',

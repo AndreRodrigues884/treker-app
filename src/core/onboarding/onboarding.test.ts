@@ -1,7 +1,10 @@
 import {
+  addedSteps,
+  answersFromProfile,
   buildProfileUpdate,
   classifySaveError,
   defaultAnswers,
+  isEditableStep,
   nextStep,
   previousStep,
   resumeDraft,
@@ -204,5 +207,84 @@ describe('classifySaveError', () => {
 
   it('treats anything else as generic', () => {
     expect(classifySaveError({ message: 'new row violates check constraint' })).toBe('generic');
+  });
+});
+
+describe('answersFromProfile', () => {
+  const defaults = defaultAnswers('PT');
+  const profile = {
+    display_name: 'Ana',
+    sports: ['gym', 'swim'] as ('gym' | 'swim')[],
+    gym_focus: 'strength' as const,
+    swim_style: 'fitness' as const,
+    default_pool_length: '50m' as const,
+    pool_unit: 'm' as const,
+    weekly_target: 5,
+    weight_unit: 'lb' as const,
+    bodyweight_kg: 72.57,
+  };
+
+  it('turns the saved profile into answers, bodyweight in the chosen unit', () => {
+    expect(answersFromProfile(profile, defaults)).toEqual({
+      displayName: 'Ana',
+      sports: ['gym', 'swim'],
+      gymFocus: 'strength',
+      swimStyle: 'fitness',
+      poolLength: '50m',
+      weeklyTarget: 5,
+      weightUnit: 'lb',
+      bodyweight: '160',
+    });
+  });
+
+  it('round-trips through buildProfileUpdate unchanged', () => {
+    const result = buildProfileUpdate(answersFromProfile(profile, defaults), device);
+    expect(result.ok && result.value).toMatchObject({
+      sports: ['gym', 'swim'],
+      gym_focus: 'strength',
+      swim_style: 'fitness',
+      default_pool_length: '50m',
+      weekly_target: 5,
+      weight_unit: 'lb',
+      bodyweight_kg: 72.57,
+    });
+  });
+
+  it('adding a sport makes its questions required again', () => {
+    const gymOnlyProfile = {
+      ...profile,
+      sports: ['gym'] as ('gym' | 'swim')[],
+      swim_style: null,
+      default_pool_length: null,
+    };
+    const answers = toggleSport(answersFromProfile(gymOnlyProfile, defaults), 'swim');
+    expect(buildProfileUpdate(answers, device)).toEqual({
+      ok: false,
+      error: { step: 'swimStyle', error: 'swimStyleRequired' },
+    });
+  });
+});
+
+describe('isEditableStep', () => {
+  it('accepts questions and rejects the summary or unknown values', () => {
+    expect(isEditableStep('gymFocus')).toBe(true);
+    expect(isEditableStep('summary')).toBe(false);
+    expect(isEditableStep('nope')).toBe(false);
+    expect(isEditableStep(undefined)).toBe(false);
+  });
+});
+
+describe('addedSteps', () => {
+  it('lists the questions a newly added sport needs', () => {
+    expect(addedSteps({ sports: ['gym'] }, { sports: ['gym', 'swim'] })).toEqual([
+      'swimStyle',
+      'poolLength',
+    ]);
+    expect(addedSteps({ sports: ['swim'] }, { sports: ['gym', 'swim'] })).toEqual(['gymFocus']);
+  });
+
+  it('is empty when a sport is removed or nothing changes', () => {
+    expect(addedSteps({ sports: ['gym', 'swim'] }, { sports: ['gym'] })).toEqual([]);
+    expect(addedSteps({ sports: ['gym'] }, { sports: ['gym'] })).toEqual([]);
   });
 });

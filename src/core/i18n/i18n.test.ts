@@ -1,5 +1,11 @@
 import { en } from './en';
-import { getMessages, interpolate, resolveLanguage } from './index';
+import {
+  effectiveLanguage,
+  getMessages,
+  interpolate,
+  isLanguagePreference,
+  resolveLanguage,
+} from './index';
 import { pt } from './pt';
 
 // Flattens a dictionary into [path, value] pairs, e.g. ['records.prShort', 'PR'].
@@ -79,5 +85,24 @@ describe('placeholders', () => {
         placeholders: placeholdersOf(text),
       });
     }
+  });
+});
+
+describe('language preference', () => {
+  it('auto follows the phone', () => {
+    expect(effectiveLanguage('auto', 'pt-PT')).toBe('pt');
+    expect(effectiveLanguage('auto', 'de-DE')).toBe('en');
+  });
+
+  it('an explicit choice wins over the phone', () => {
+    expect(effectiveLanguage('en', 'pt-PT')).toBe('en');
+    expect(effectiveLanguage('pt', 'en-US')).toBe('pt');
+  });
+
+  it('recognizes stored values', () => {
+    expect(isLanguagePreference('auto')).toBe(true);
+    expect(isLanguagePreference('pt')).toBe(true);
+    expect(isLanguagePreference('fr')).toBe(false);
+    expect(isLanguagePreference(null)).toBe(false);
   });
 });

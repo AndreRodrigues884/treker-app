@@ -20,7 +20,9 @@ import {
   Card,
   Chip,
   Divider,
+  EmptyState,
   Icon,
+  ListRow,
   OptionCard,
   PrBadge,
   ProgressBar,
@@ -46,7 +48,7 @@ import {
 
 const textVariants = Object.keys(typography) as TextVariant[];
 const colorTokens = Object.keys(colors) as ColorToken[];
-const buttonVariants: ButtonVariant[] = ['primary', 'secondary', 'ghost'];
+const buttonVariants: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'danger'];
 const badgeTones: BadgeTone[] = ['neutral', 'gym', 'swim', 'record', 'positive', 'danger'];
 const accentTones: AccentTone[] = ['gym', 'swim', 'record', 'positive', 'danger'];
 const icons: [string, LucideIcon][] = [
@@ -203,6 +205,23 @@ function ComponentCatalog() {
             decreaseLabel="Fewer"
             increaseLabel="More"
           />
+        </Section>
+
+        <Section title="EmptyState">
+          <EmptyState
+            icon={Trophy}
+            tone="record"
+            title="No records yet"
+            body="Log a workout and your personal records appear here."
+          />
+        </Section>
+
+        <Section title="ListRow">
+          <View>
+            <ListRow label="Weekly goal" value="4 a week" onPress={() => {}} />
+            <ListRow label="Privacy policy" kind="link" onPress={() => {}} />
+            <ListRow label="Delete account" kind="danger" onPress={() => {}} />
+          </View>
         </Section>
 
         <Section title="Chip">

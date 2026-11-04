@@ -8,3 +8,7 @@ jest.mock(
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
+
+// Reanimated (used by the side menu) runs on the JS thread in tests. Needs the resolver in
+// test-utils/jest-resolver.js (Reanimated + Worklets chained with React Native's).
+require('react-native-reanimated').setUpTests();

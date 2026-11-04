@@ -42,6 +42,8 @@ const state = {
   profile: null as ProfileRow | null,
   // When set, profile updates fail with this error (see failProfileUpdates).
   updateError: null as object | null,
+  // Milliseconds before a profile read answers, like a real network (see delayProfileReads).
+  profileDelayMs: 0,
   listeners: new Set<AuthListener>(),
 };
 
@@ -63,6 +65,11 @@ const updateProfile = jest.fn((values: Partial<ProfileRow>) => ({
 
 export const supabaseMock = {
   updateProfile,
+  // rpc('delete_my_account') removes the profile, like the cascade in Postgres.
+  rpc: jest.fn(async (fn: string) => {
+    if (fn === 'delete_my_account') state.profile = null;
+    return { data: null, ...ok };
+  }),
   auth: {
     onAuthStateChange: jest.fn((listener: AuthListener) => {
       state.listeners.add(listener);
@@ -85,11 +92,22 @@ export const supabaseMock = {
   // from('profiles').select(...).eq('id', id).maybeSingle() and .update(values).eq('id', id)
   from: jest.fn((_table: string) => ({
     select: () => ({
-      eq: () => ({ maybeSingle: async () => ({ data: state.profile, ...ok }) }),
+      eq: () => ({
+        maybeSingle: async () => {
+          if (state.profileDelayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, state.profileDelayMs));
+          }
+          return { data: state.profile, ...ok };
+        },
+      }),
     }),
     update: updateProfile,
   })),
 };
+
+export function delayProfileReads(ms: number) {
+  state.profileDelayMs = ms;
+}
 
 export function failProfileUpdates(error: object | null) {
   state.updateError = error;
@@ -110,6 +128,7 @@ export function resetSupabaseMock(
   state.session = options.signedIn ? testSession : null;
   state.profile = options.profile ?? null;
   state.updateError = null;
+  state.profileDelayMs = 0;
   state.listeners.clear();
   jest.clearAllMocks();
 }

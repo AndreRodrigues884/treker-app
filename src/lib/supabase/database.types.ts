@@ -595,7 +595,7 @@ export type Database = {
       };
     };
     Functions: {
-      [_ in never]: never;
+      delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
     };
     Enums: {
       activity_type: 'gym' | 'swim';

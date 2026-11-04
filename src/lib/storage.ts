@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const storageKeys = {
   introSeen: 'treker.intro-seen',
+  language: 'treker.language',
   onboardingDraft: (userId: string) => `treker.onboarding-draft.${userId}`,
 } as const;
 

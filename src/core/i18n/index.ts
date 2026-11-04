@@ -24,6 +24,21 @@ export function getMessages(language: Language): Messages {
   return dictionaries[language];
 }
 
+// The language chosen in the app settings: 'auto' follows the phone.
+export type LanguagePreference = 'auto' | Language;
+export const languagePreferences: readonly LanguagePreference[] = ['auto', ...languages];
+
+export function isLanguagePreference(value: unknown): value is LanguagePreference {
+  return languagePreferences.includes(value as LanguagePreference);
+}
+
+export function effectiveLanguage(
+  preference: LanguagePreference,
+  deviceLanguageTag: string | null | undefined,
+): Language {
+  return preference === 'auto' ? resolveLanguage(deviceLanguageTag) : preference;
+}
+
 export function intlLocale(language: Language): string {
   return intlLocales[language];
 }
