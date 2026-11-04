@@ -10,7 +10,21 @@ export type ProfileRow = {
   display_name: string | null;
   weight_unit: 'kg' | 'lb';
   pool_unit: 'm' | 'yd';
+  bodyweight_kg: number | null;
   onboarded_at: string | null;
+  sports: ('gym' | 'swim')[] | null;
+  gym_focus: 'strength' | 'hypertrophy' | 'maintenance' | null;
+  swim_style: 'competitive' | 'fitness' | null;
+  default_pool_length: '25m' | '50m' | '25yd' | null;
+  weekly_target: number | null;
+};
+
+// What supabase-js returns when the phone has no connection.
+export const networkError = {
+  message: 'TypeError: Network request failed',
+  details: '',
+  hint: '',
+  code: '',
 };
 
 export const TEST_USER_ID = 'aaaaaaaa-0000-0000-0000-000000000000';
@@ -26,6 +40,8 @@ export const testSession = {
 const state = {
   session: null as Session | null,
   profile: null as ProfileRow | null,
+  // When set, profile updates fail with this error (see failProfileUpdates).
+  updateError: null as object | null,
   listeners: new Set<AuthListener>(),
 };
 
@@ -36,7 +52,17 @@ function emit(event: string, session: Session | null) {
 
 const ok = { error: null };
 
+// from('profiles').update(values).eq('id', id); shared so tests can count the updates.
+const updateProfile = jest.fn((values: Partial<ProfileRow>) => ({
+  eq: async () => {
+    if (state.updateError) return { error: state.updateError };
+    if (state.profile) state.profile = { ...state.profile, ...values };
+    return ok;
+  },
+}));
+
 export const supabaseMock = {
+  updateProfile,
   auth: {
     onAuthStateChange: jest.fn((listener: AuthListener) => {
       state.listeners.add(listener);
@@ -61,14 +87,17 @@ export const supabaseMock = {
     select: () => ({
       eq: () => ({ maybeSingle: async () => ({ data: state.profile, ...ok }) }),
     }),
-    update: (values: Partial<ProfileRow>) => ({
-      eq: async () => {
-        if (state.profile) state.profile = { ...state.profile, ...values };
-        return ok;
-      },
-    }),
+    update: updateProfile,
   })),
 };
+
+export function failProfileUpdates(error: object | null) {
+  state.updateError = error;
+}
+
+export function currentProfile(): ProfileRow | null {
+  return state.profile;
+}
 
 export const clientModule = {
   supabase: supabaseMock,
@@ -80,17 +109,37 @@ export function resetSupabaseMock(
 ) {
   state.session = options.signedIn ? testSession : null;
   state.profile = options.profile ?? null;
+  state.updateError = null;
   state.listeners.clear();
   jest.clearAllMocks();
 }
 
+// A profile right after signup (onboarding not done).
 export function profileRow(overrides: Partial<ProfileRow> = {}): ProfileRow {
   return {
     id: TEST_USER_ID,
     display_name: null,
     weight_unit: 'kg',
     pool_unit: 'm',
+    bodyweight_kg: null,
     onboarded_at: null,
+    sports: null,
+    gym_focus: null,
+    swim_style: null,
+    default_pool_length: null,
+    weekly_target: null,
     ...overrides,
   };
+}
+
+// A profile that finished onboarding.
+export function onboardedProfile(overrides: Partial<ProfileRow> = {}): ProfileRow {
+  return profileRow({
+    display_name: 'Ana',
+    onboarded_at: '2026-11-04T10:00:00Z',
+    sports: ['gym'],
+    gym_focus: 'strength',
+    weekly_target: 3,
+    ...overrides,
+  });
 }

@@ -2,42 +2,79 @@ import { fireEvent, screen } from 'expo-router/testing-library';
 
 import { en } from '@/core/i18n/en';
 
-import { renderApp } from '../../test-utils/render-app';
-import { profileRow, resetSupabaseMock, supabaseMock } from '../../test-utils/supabase-mock';
+import { renderApp, resetStorage } from '../../test-utils/render-app';
+import {
+  onboardedProfile,
+  profileRow,
+  resetSupabaseMock,
+  supabaseMock,
+} from '../../test-utils/supabase-mock';
 
 jest.mock('@/lib/supabase/client', () => require('../../test-utils/supabase-mock').clientModule);
 
 describe('route protection', () => {
-  it('sends a signed-out user to the email screen', async () => {
+  it('shows the intro to a signed-out user the first time', async () => {
     resetSupabaseMock({ signedIn: false });
+    await resetStorage({ introSeen: false });
+    await renderApp('/');
+
+    expect(screen).toHavePathname('/welcome');
+  });
+
+  it('opens on the email screen once the intro was seen', async () => {
+    resetSupabaseMock({ signedIn: false });
+    await resetStorage({ introSeen: true });
     await renderApp('/');
 
     expect(screen).toHavePathname('/sign-in');
     expect(screen.getByRole('header', { name: en.auth.emailTitle })).toBeOnTheScreen();
   });
 
-  it('sends a signed-in user without onboarding to onboarding', async () => {
+  it('sends a signed-in user without onboarding to the questionnaire', async () => {
     resetSupabaseMock({ signedIn: true, profile: profileRow() });
+    await resetStorage();
     await renderApp('/');
 
     expect(screen).toHavePathname('/onboarding');
   });
 
-  it('sends an onboarded user to the app', async () => {
+  it('sends an onboarded user to the app, which shows the saved choices', async () => {
     resetSupabaseMock({
       signedIn: true,
-      profile: profileRow({ display_name: 'Ana', onboarded_at: '2026-11-04T10:00:00Z' }),
+      profile: onboardedProfile({
+        sports: ['gym', 'swim'],
+        swim_style: 'fitness',
+        default_pool_length: '50m',
+      }),
     });
+    await resetStorage();
     await renderApp('/sign-in');
 
     expect(screen).toHavePathname('/');
     expect(screen.getByText('Hi, Ana')).toBeOnTheScreen();
+    expect(screen.getByText('Gym, Swimming')).toBeOnTheScreen();
+    expect(screen.getByText(en.onboarding.gymFocus.strength)).toBeOnTheScreen();
+    expect(screen.getByText(en.onboarding.swimStyle.fitness)).toBeOnTheScreen();
+    expect(screen.getByText('50 m · Long course')).toBeOnTheScreen();
+    expect(screen.getByText('3 a week')).toBeOnTheScreen();
+  });
+
+  it('signing out opens the email screen, not the intro', async () => {
+    resetSupabaseMock({ signedIn: true, profile: onboardedProfile() });
+    await resetStorage({ introSeen: true });
+    await renderApp('/');
+
+    await fireEvent.press(screen.getByRole('button', { name: en.home.signOut }));
+
+    expect(supabaseMock.auth.signOut).toHaveBeenCalled();
+    expect(screen).toHavePathname('/sign-in');
   });
 });
 
 describe('sign-in flow', () => {
-  it('a correct code takes a new user to onboarding, then to the app', async () => {
+  it('a correct code takes a new user to the questionnaire', async () => {
     resetSupabaseMock({ signedIn: false, profile: profileRow() });
+    await resetStorage();
     await renderApp('/sign-in');
 
     await fireEvent.changeText(screen.getByLabelText(en.auth.emailLabel), 'Ana@Example.com');
@@ -57,36 +94,16 @@ describe('sign-in flow', () => {
       type: 'email',
     });
     expect(screen).toHavePathname('/onboarding');
-
-    await fireEvent.changeText(screen.getByLabelText(en.onboarding.nameLabel), 'Ana');
-    await fireEvent.press(screen.getByRole('button', { name: en.onboarding.continue }));
-
-    expect(screen).toHavePathname('/');
-    expect(screen.getByText('Hi, Ana')).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: en.onboarding.name.title })).toBeOnTheScreen();
   });
 
   it('a correct code takes an onboarded user straight to the app', async () => {
-    resetSupabaseMock({
-      signedIn: false,
-      profile: profileRow({ display_name: 'Ana', onboarded_at: '2026-11-04T10:00:00Z' }),
-    });
+    resetSupabaseMock({ signedIn: false, profile: onboardedProfile() });
+    await resetStorage();
     await renderApp('/verify?email=ana%40example.com');
 
     await fireEvent.changeText(screen.getByLabelText(en.auth.codeLabel), '123456');
 
     expect(screen).toHavePathname('/');
-  });
-
-  it('signing out goes back to the email screen', async () => {
-    resetSupabaseMock({
-      signedIn: true,
-      profile: profileRow({ display_name: 'Ana', onboarded_at: '2026-11-04T10:00:00Z' }),
-    });
-    await renderApp('/');
-
-    await fireEvent.press(screen.getByRole('button', { name: en.home.signOut }));
-
-    expect(supabaseMock.auth.signOut).toHaveBeenCalled();
-    expect(screen).toHavePathname('/sign-in');
   });
 });

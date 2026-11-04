@@ -1,8 +1,34 @@
-# Login no Treker
+# Login e onboarding no Treker
 
-Como funciona o login por código, onde fica a sessão e como testar em desenvolvimento.
+Como funcionam a apresentação, o login por código e o questionário inicial, onde fica a sessão e como testar em desenvolvimento.
 
-## Como funciona
+## Fluxo completo
+
+```mermaid
+flowchart TD
+  A[Abrir a app] --> B{Tem sessão?}
+  B -- não --> C{Já viu a apresentação?}
+  C -- não --> D["/welcome: 4 ecrãs"]
+  C -- sim --> E["/sign-in: email"]
+  D -- "Começar / Já tenho conta / Saltar" --> E
+  E --> F["/verify: código de 6 dígitos"]
+  F --> B
+  B -- sim --> G{onboarded_at preenchido?}
+  G -- não --> H["/onboarding: questionário"]
+  H -- "Entrar no Treker" --> I["/ (app)"]
+  G -- sim --> I
+  I -- "Terminar sessão" --> E
+```
+
+### 1. Apresentação (`/welcome`)
+
+Quatro ecrãs que se passam a deslizar, ou com "Seguinte" para quem não consegue deslizar (por exemplo, com um leitor de ecrã). Têm indicador de página e "Saltar" sempre visível. Cada ilustração é feita com os componentes da app ([`src/features/intro/illustrations.tsx`](../src/features/intro/illustrations.tsx)).
+
+- **Só aparece na primeira vez.** Depois de terminar (por qualquer botão), o telemóvel guarda `treker.intro-seen` e, mesmo depois de terminar sessão, a app abre no ecrã do email.
+- **Reduzir movimento:** com a opção do sistema ligada, o botão "Seguinte" muda de página sem animação.
+- **"Começar" e "Já tenho conta"** levam os dois ao ecrã do email, porque o login por código cria a conta quando é preciso; só muda o título ("Cria a tua conta" ou "Entrar").
+
+### 2. Login por código
 
 O atleta entra sem password, com um **código de 6 dígitos** enviado por email.
 
@@ -24,13 +50,7 @@ sequenceDiagram
    - Teclado numérico com sugestão automática do código (`oneTimeCode` no iOS, `sms-otp` no Android). Ao 6.º dígito o código é enviado sozinho.
    - "Enviar novo código" fica bloqueado durante 60 s, com contagem decrescente.
    - "Usar outro email" volta ao ecrã anterior.
-3. **Onboarding** (`/onboarding`), só da primeira vez:
-   - O atleta indica o nome, a unidade de peso (kg/lb), a unidade da piscina (m/yd) e, se quiser, o peso corporal.
-   - A língua e o fuso horário vêm do telemóvel.
-   - Tudo é gravado em `profiles`, e `onboarded_at` marca o onboarding como feito.
-4. **App** (`/`).
-
-### Regras
+#### Regras do código
 
 | Regra | Valor | Onde |
 | --- | --- | --- |
@@ -41,7 +61,7 @@ sequenceDiagram
 
 **Não revela se um email tem conta.** Um email novo recebe o mesmo código e a mesma resposta que um email já registado: a conta é criada nesse momento.
 
-### Mensagens de erro
+#### Mensagens de erro
 
 Todas traduzidas (en/pt), em `auth.errors` nos dicionários.
 
@@ -55,17 +75,38 @@ Todas traduzidas (en/pt), em `auth.errors` nos dicionários.
 
 O Supabase responde da mesma forma (`otp_expired`) a um código errado e a um código expirado. A app distingue-os pelo tempo: se ainda não passaram 10 minutos desde o envio, é um código errado. A lógica está em `classifyVerifyError`, com testes.
 
+### 3. Questionário (`/onboarding`)
+
+Só depois do primeiro login, enquanto `profiles.onboarded_at` estiver vazio. Mostra uma pergunta por ecrã, com barra de progresso, "Voltar" (também o botão de recuo do Android) e opções grandes. **Cada pergunta muda alguma coisa na app**: não se pergunta idade, sexo, altura nem nível de experiência.
+
+| # | Pergunta | Quando aparece | Grava em | Para quê |
+| --- | --- | --- | --- | --- |
+| 1 | Nome | Sempre | `display_name` | Saudação e perfil |
+| 2 | Modalidades (Ginásio, Natação; pelo menos uma) | Sempre | `sports` | Ecrã inicial e perguntas seguintes |
+| 3 | Foco no ginásio: força, massa muscular ou manter a forma | Com ginásio | `gym_focus` | O que o ecrã inicial destaca: recordes e 1RM, volume por grupo muscular, ou consistência |
+| 4 | Competes ou treinas sem competir | Com natação | `swim_style` | Tempos de prova e recordes por prova, ou distância e regularidade |
+| 5 | Piscina habitual: 25 m, 50 m ou 25 jardas | Com natação | `default_pool_length`, `pool_unit` | Pré-selecionada ao registar um tempo |
+| 6 | Treinos por semana (1 a 14, todas as modalidades) | Sempre | `weekly_target` | Objetivo semanal |
+| 7 | Unidade de peso e peso corporal (opcional) | Sempre | `weight_unit`, `bodyweight_kg` | Unidades e 1RM das elevações e dips |
+| 8 | Resumo e "Entrar no Treker" | Sempre | — | — |
+
+- **Valores por defeito:** kg e 25 m; lb e 25 jardas só se a região do telemóvel for os EUA. A língua e o fuso horário vêm do telemóvel.
+- **Lógica fora dos ecrãs:** que perguntas aparecem, a ordem, a validação de cada resposta, a retoma e o que se grava estão em [`src/core/onboarding`](../src/core/onboarding/), com testes.
+- **Retoma:** cada resposta é guardada no telemóvel (`treker.onboarding-draft.<id do utilizador>`). Se a app fechar a meio, o questionário continua na mesma pergunta. Se uma resposta anterior faltar, continua na primeira pergunta por responder.
+- **Gravação:** no fim, grava tudo de uma vez em `profiles`, incluindo `onboarded_at`. O Postgres confirma que as respostas estão completas (`profiles_onboarding_complete`). Se falhar (por exemplo, sem rede), mostra o erro e deixa tentar outra vez, sem perder nada. Só depois de gravar é que o rascunho é apagado.
+- **Ecrã inicial provisório:** mostra o nome e o resumo das escolhas. As respostas vão decidir o ecrã inicial verdadeiro (ver a nota em [plano-produto.md](plano-produto.md)).
+
 ## Navegação
 
 As rotas estão em três grupos, protegidos com `Stack.Protected` (a forma recomendada pelo Expo Router), em [`src/features/auth/root-navigator.tsx`](../src/features/auth/root-navigator.tsx):
 
 | Situação | Grupo disponível | Ecrãs |
 | --- | --- | --- |
-| Sem sessão | `(auth)` | `/sign-in`, `/verify` |
+| Sem sessão | `(auth)` | `/welcome` (só da primeira vez), `/sign-in`, `/verify` |
 | Com sessão, sem onboarding | `(onboarding)` | `/onboarding` |
 | Com sessão e onboarding feito | `(app)` | `/`, … |
 
-Quando a sessão ou o perfil mudam, o router leva o atleta para o grupo certo (`redirectTo`). O ecrã de arranque (splash) fica visível até as fontes e a sessão guardada estarem carregadas, para o login nunca aparecer por instantes antes da app.
+Quando a sessão ou o perfil mudam, o router leva o atleta para o grupo certo (`redirectTo`). O ecrã de arranque (splash) fica visível até as fontes, a sessão guardada e a indicação de que a apresentação já foi vista estarem carregadas, para nunca aparecer por instantes o ecrã errado.
 
 Isto só decide a navegação. **Os dados estão protegidos no Postgres** (RLS), não pelas rotas.
 
@@ -89,7 +130,7 @@ As variáveis ficam num `.env` na raiz, que não vai para o git. Copia o [`.env.
 
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=http://192.168.1.69:54321
-EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
 - **A chave é a pública.** Usa o `PUBLISHABLE_KEY` de `npx supabase status`, o novo nome da chave anon. Tudo o que está em variáveis `EXPO_PUBLIC_` vai dentro da app, por isso **nunca** se põe aqui a chave secreta nem a `service_role`.
@@ -127,9 +168,17 @@ Em produção (passo 4b) é preciso um serviço de email a sério (SMTP) e os me
 ## Testes
 
 - `src/core/auth/auth.test.ts`: validação do email e do código, tempo de espera para reenviar, e classificação de erros.
-- `src/core/profile/onboarding.test.ts`: validação do onboarding e conversão de lb para kg.
-- `__tests__/auth/`: ecrãs com o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts)):
-  - código errado, sem rede e formato inválido;
-  - reenviar bloqueado durante 60 s;
-  - encaminhamento para o onboarding ou para a app;
-  - terminar sessão.
+- `src/core/onboarding/onboarding.test.ts`:
+  - as perguntas condicionais (só ginásio, só natação, as duas), a ordem e o progresso;
+  - a validação de cada resposta e os valores por defeito (EUA ou não);
+  - a retoma de um rascunho e o que se grava no perfil.
+- `src/core/units/units.test.ts`: números com vírgula ou ponto e conversão entre kg e lb.
+- Ecrãs com o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts)) e as rotas reais ([`test-utils/render-app.tsx`](../test-utils/render-app.tsx)):
+  - `__tests__/auth/`: código errado, sem rede e formato inválido; reenviar bloqueado durante 60 s; encaminhamento (apresentação, email, questionário, app); terminar sessão.
+  - `__tests__/intro/`: indicador de página, "Saltar", os dois botões finais, e reduzir movimento.
+  - `__tests__/onboarding/`: perguntas condicionais, resposta em falta, retoma a meio, o ecrã final, a gravação de uma só vez e a falha de rede.
+- `supabase/tests/12_profile_onboarding.sql`: as regras de consistência das respostas e as permissões.
+
+## Ver a apresentação outra vez (desenvolvimento)
+
+No ecrã do email há um botão **"Replay intro (dev)"**, que só existe em desenvolvimento. Termina sessão, carrega nesse botão, e a app volta à apresentação como se fosse a primeira vez.

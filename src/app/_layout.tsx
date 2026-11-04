@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { RootNavigator } from '@/features/auth/root-navigator';
 import { SplashController } from '@/features/auth/splash-controller';
+import { IntroProvider } from '@/features/intro/intro-state';
 import { fontAssets } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -15,10 +16,12 @@ export default function RootLayout() {
   const fontsReady = fontsLoaded || fontError !== null;
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      <SplashController fontsReady={fontsReady} />
-      {fontsReady && <RootNavigator />}
-    </AuthProvider>
+    <IntroProvider>
+      <AuthProvider>
+        <StatusBar style="light" />
+        <SplashController fontsReady={fontsReady} />
+        {fontsReady && <RootNavigator />}
+      </AuthProvider>
+    </IntroProvider>
   );
 }

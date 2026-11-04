@@ -1,15 +1,20 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, Button, Screen, TextField } from '@/components';
 import { validateEmail } from '@/core/auth';
 import { sendEmailCode } from '@/features/auth/api';
+import { useIntro } from '@/features/intro/intro-state';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
 
+// One screen for new and returning users (sign-in by code creates the account when needed);
+// "mode" from the intro only changes the title.
 export default function SignInScreen() {
   const { t } = useI18n();
+  const { mode } = useLocalSearchParams<{ mode?: 'signup' | 'signin' }>();
+  const { resetIntro } = useIntro();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string>();
   const [sending, setSending] = useState(false);
@@ -41,7 +46,7 @@ export default function SignInScreen() {
       <View style={styles.content}>
         <View style={styles.header}>
           <AppText variant="title" accessibilityRole="header">
-            {t.auth.emailTitle}
+            {mode === 'signup' ? t.auth.signUpTitle : t.auth.emailTitle}
           </AppText>
           <AppText color="muted">{t.auth.emailSubtitle}</AppText>
         </View>
@@ -60,6 +65,17 @@ export default function SignInScreen() {
           error={error}
         />
         <Button label={t.auth.sendCode} onPress={submit} loading={sending} fullWidth />
+        {__DEV__ && (
+          // Dev-only tool to test the intro again, so its label is not translated.
+          <Button
+            label="Replay intro (dev)"
+            variant="ghost"
+            onPress={async () => {
+              await resetIntro();
+              router.replace('/welcome');
+            }}
+          />
+        )}
       </View>
     </Screen>
   );

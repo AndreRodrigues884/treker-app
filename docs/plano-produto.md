@@ -88,6 +88,8 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 | Integração com Strava e Garmin | Natação, Corrida | P2 | Maior trabalho; depende da Corrida e de aprovações externas |
 | Corrida (registo, ritmo por distância, quilómetros por sapatilha) | Corrida | P2 | Depois do critério de avanço |
 
+**Nota:** As respostas do onboarding decidem o ecrã inicial (modalidades, foco do ginásio, estilo de natação, objetivo semanal) — aplicar quando o ecrã inicial for construído.
+
 ## Roadmap por prioridade
 
 As fases 0 a 3 são a v1 (todas as P0); a v1.1 e a fase 5 só arrancam depois de passarem os testes com utilizadores.

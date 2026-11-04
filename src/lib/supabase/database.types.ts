@@ -335,41 +335,56 @@ export type Database = {
         Row: {
           bodyweight_kg: number | null;
           created_at: string;
+          default_pool_length: Database['public']['Enums']['pool_length'] | null;
           display_name: string | null;
+          gym_focus: Database['public']['Enums']['gym_focus'] | null;
           id: string;
           locale: string;
           onboarded_at: string | null;
           pool_unit: Database['public']['Enums']['pool_unit'];
+          sports: Database['public']['Enums']['activity_type'][] | null;
+          swim_style: Database['public']['Enums']['swim_style'] | null;
           timezone: string;
           updated_at: string;
           visibility: Database['public']['Enums']['visibility'];
+          weekly_target: number | null;
           weight_unit: Database['public']['Enums']['weight_unit'];
         };
         ComputedFields: never;
         Insert: {
           bodyweight_kg?: number | null;
           created_at?: string;
+          default_pool_length?: Database['public']['Enums']['pool_length'] | null;
           display_name?: string | null;
+          gym_focus?: Database['public']['Enums']['gym_focus'] | null;
           id: string;
           locale?: string;
           onboarded_at?: string | null;
           pool_unit?: Database['public']['Enums']['pool_unit'];
+          sports?: Database['public']['Enums']['activity_type'][] | null;
+          swim_style?: Database['public']['Enums']['swim_style'] | null;
           timezone?: string;
           updated_at?: string;
           visibility?: Database['public']['Enums']['visibility'];
+          weekly_target?: number | null;
           weight_unit?: Database['public']['Enums']['weight_unit'];
         };
         Update: {
           bodyweight_kg?: number | null;
           created_at?: string;
+          default_pool_length?: Database['public']['Enums']['pool_length'] | null;
           display_name?: string | null;
+          gym_focus?: Database['public']['Enums']['gym_focus'] | null;
           id?: string;
           locale?: string;
           onboarded_at?: string | null;
           pool_unit?: Database['public']['Enums']['pool_unit'];
+          sports?: Database['public']['Enums']['activity_type'][] | null;
+          swim_style?: Database['public']['Enums']['swim_style'] | null;
           timezone?: string;
           updated_at?: string;
           visibility?: Database['public']['Enums']['visibility'];
+          weekly_target?: number | null;
           weight_unit?: Database['public']['Enums']['weight_unit'];
         };
         Relationships: [];
@@ -596,6 +611,7 @@ export type Database = {
         | 'band'
         | 'other';
       exercise_unit: 'reps' | 'seconds';
+      gym_focus: 'strength' | 'hypertrophy' | 'maintenance';
       muscle_group:
         | 'chest'
         | 'back'
@@ -613,6 +629,7 @@ export type Database = {
       pool_unit: 'm' | 'yd';
       swim_kind: 'race' | 'training';
       swim_stroke: 'free' | 'back' | 'breast' | 'fly' | 'im';
+      swim_style: 'competitive' | 'fitness';
       visibility: 'private' | 'followers' | 'public';
       weight_unit: 'kg' | 'lb';
     };
@@ -743,6 +760,7 @@ export const Constants = {
         'other',
       ],
       exercise_unit: ['reps', 'seconds'],
+      gym_focus: ['strength', 'hypertrophy', 'maintenance'],
       muscle_group: [
         'chest',
         'back',
@@ -761,6 +779,7 @@ export const Constants = {
       pool_unit: ['m', 'yd'],
       swim_kind: ['race', 'training'],
       swim_stroke: ['free', 'back', 'breast', 'fly', 'im'],
+      swim_style: ['competitive', 'fitness'],
       visibility: ['private', 'followers', 'public'],
       weight_unit: ['kg', 'lb'],
     },

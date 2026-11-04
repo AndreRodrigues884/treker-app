@@ -9,13 +9,13 @@ import { secureSessionStorage } from './secure-session-storage';
 
 // Expo inlines EXPO_PUBLIC_ variables at build time, so they must be read with these exact names.
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-// The public key (Supabase now calls it "publishable"; the legacy anon key also works). It is safe
-// in the app because RLS protects every table. Never put the secret/service_role key here.
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// The public publishable key. It is safe in the app because RLS protects every table. Never put
+// the secret/service_role key here.
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error(
-    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY. Copy .env.example to .env (see docs/auth.md).',
+    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env (see docs/auth.md).',
   );
 }
 

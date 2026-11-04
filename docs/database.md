@@ -43,6 +43,13 @@ Uma linha por utilizador, com o mesmo id da conta (`auth.users.id`). **É criada
 | `bodyweight_kg` | Peso corporal. **Privado**: nunca entra em vistas públicas |
 | `visibility` | `private` por defeito |
 | `onboarded_at` | Quando o atleta terminou o onboarding; vazio = a app mostra o onboarding (ver [auth.md](auth.md)) |
+| `sports` | Modalidades que treina (`gym`, `swim`; lista sem repetidos e não vazia) |
+| `gym_focus` | Foco no ginásio: `strength`, `hypertrophy` ou `maintenance` |
+| `swim_style` | `competitive` ou `fitness` |
+| `default_pool_length` | Piscina pré-selecionada ao registar um tempo (`25m`, `50m`, `25yd`) |
+| `weekly_target` | Treinos por semana, de 1 a 14, todas as modalidades juntas |
+
+Quando `onboarded_at` está preenchido, o Postgres exige as respostas completas (`profiles_onboarding_complete`): `sports` e `weekly_target` sempre, `gym_focus` se treina ginásio, e `swim_style` e `default_pool_length` se treina natação. O utilizador só altera estas colunas no próprio perfil (grants por coluna e RLS).
 
 ### `exercises` — exercícios
 

@@ -51,9 +51,10 @@ select isnt_empty(
 );
 
 select isnt_empty(
-  $$ update public.profiles set onboarded_at = now()
+  $$ update public.profiles
+     set sports = '{gym}', gym_focus = 'strength', weekly_target = 3, onboarded_at = now()
      where id = 'aaaaaaaa-0000-0000-0000-000000000000' returning id $$,
-  'a user marks their own onboarding as done'
+  'a user saves their answers and marks their own onboarding as done'
 );
 
 select is_empty(

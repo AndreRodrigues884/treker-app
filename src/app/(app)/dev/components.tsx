@@ -21,9 +21,11 @@ import {
   Chip,
   Divider,
   Icon,
+  OptionCard,
   PrBadge,
   ProgressBar,
   Screen,
+  Stepper,
   TextField,
   type BadgeTone,
   type ButtonVariant,
@@ -67,6 +69,8 @@ function ComponentCatalog() {
   const { language } = useI18n();
   const [selectedChips, setSelectedChips] = useState<string[]>(['Gym']);
   const [weight, setWeight] = useState('');
+  const [option, setOption] = useState('strength');
+  const [count, setCount] = useState(3);
   const [loading, setLoading] = useState(false);
 
   const toggleChip = (label: string) =>
@@ -168,6 +172,37 @@ function ComponentCatalog() {
             onChangeText={setWeight}
           />
           <TextField label="Reps" kind="integer" defaultValue="0" error="Enter at least 1 rep." />
+        </Section>
+
+        <Section title="OptionCard">
+          <OptionCard
+            title="Strength"
+            description="Records and estimated 1RM come first."
+            icon={Dumbbell}
+            selected={option === 'strength'}
+            onPress={() => setOption('strength')}
+          />
+          <OptionCard
+            title="Competitive"
+            description="Race times and records per event come first."
+            icon={Waves}
+            tone="swim"
+            selected={option === 'competitive'}
+            onPress={() => setOption('competitive')}
+          />
+        </Section>
+
+        <Section title="Stepper">
+          <Stepper
+            value={count}
+            min={1}
+            max={14}
+            onChange={setCount}
+            label="Workouts per week"
+            valueText={`${count} a week`}
+            decreaseLabel="Fewer"
+            increaseLabel="More"
+          />
         </Section>
 
         <Section title="Chip">
