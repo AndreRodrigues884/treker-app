@@ -1,0 +1,118 @@
+-- Shared test helpers, included at the top of each test file with \ir (inside its transaction,
+-- so everything here is rolled back with the test). The .psql extension keeps pg_prove from
+-- running it as a test file.
+
+set local client_min_messages = warning;
+create extension if not exists pgtap with schema extensions;
+
+create schema tests;
+grant usage on schema tests to anon, authenticated;
+
+-- Creates a user the way Supabase Auth does; the signup trigger then creates the profile.
+create function tests.create_user(p_id uuid, p_email text, p_display_name text default null)
+returns uuid
+language plpgsql
+as $$
+begin
+  insert into auth.users (
+    id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+  )
+  values (
+    p_id,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    p_email,
+    '{}'::jsonb,
+    case
+      when p_display_name is null then '{}'::jsonb
+      else jsonb_build_object('display_name', p_display_name)
+    end,
+    now(),
+    now()
+  );
+  return p_id;
+end;
+$$;
+
+-- Acts as a signed-in user for the rest of the transaction: auth.uid() returns p_user_id and
+-- RLS applies. Use `reset role` to go back to the test runner's role.
+create function tests.authenticate_as(p_user_id uuid)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config(
+    'request.jwt.claims',
+    jsonb_build_object('sub', p_user_id, 'role', 'authenticated')::text,
+    true
+  );
+  perform set_config('role', 'authenticated', true);
+end;
+$$;
+
+-- Acts as a visitor who is not signed in (the anon key).
+create function tests.authenticate_as_anon()
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', '{"role": "anon"}', true);
+  perform set_config('role', 'anon', true);
+end;
+$$;
+
+grant execute on all functions in schema tests to anon, authenticated;
+
+-- Two users and one row of every table for each, created as the test runner (bypassing RLS).
+-- Ids: Ana's rows start with a, Bruno's with b.
+select tests.create_user('aaaaaaaa-0000-0000-0000-000000000000', 'ana@example.com', 'Ana');
+select tests.create_user('bbbbbbbb-0000-0000-0000-000000000000', 'bruno@example.com');
+
+insert into public.exercises (id, owner_id, name_en, name_pt, muscle_group, equipment)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000e001', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'Ana curl', 'Curl da Ana', 'biceps', 'dumbbell'),
+  ('bbbbbbbb-0000-0000-0000-00000000e001', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'Bruno row', 'Remada do Bruno', 'back', 'cable');
+
+insert into public.workout_templates (id, user_id, name)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000f001', 'aaaaaaaa-0000-0000-0000-000000000000', 'Push A'),
+  ('bbbbbbbb-0000-0000-0000-00000000f001', 'bbbbbbbb-0000-0000-0000-000000000000', 'Pull B');
+
+insert into public.workout_template_exercises (id, user_id, template_id, exercise_id, position)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000f101', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'aaaaaaaa-0000-0000-0000-00000000f001', 'aaaaaaaa-0000-0000-0000-00000000e001', 0),
+  ('bbbbbbbb-0000-0000-0000-00000000f101', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'bbbbbbbb-0000-0000-0000-00000000f001', 'bbbbbbbb-0000-0000-0000-00000000e001', 0);
+
+insert into public.activities (id, user_id, type, local_date, timezone)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000a001', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'gym', '2026-11-03', 'Europe/Lisbon'),
+  ('aaaaaaaa-0000-0000-0000-00000000a002', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'swim', '2026-11-04', 'Europe/Lisbon'),
+  ('bbbbbbbb-0000-0000-0000-00000000a001', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'gym', '2026-11-03', 'Europe/Lisbon'),
+  ('bbbbbbbb-0000-0000-0000-00000000a002', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'swim', '2026-11-04', 'Europe/Lisbon');
+
+insert into public.gym_sets (
+  id, user_id, activity_id, exercise_id, exercise_position, set_number, weight_kg, reps
+)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000c001', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'aaaaaaaa-0000-0000-0000-00000000a001', 'aaaaaaaa-0000-0000-0000-00000000e001', 0, 1, 12.5, 10),
+  ('bbbbbbbb-0000-0000-0000-00000000c001', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'bbbbbbbb-0000-0000-0000-00000000a001', 'bbbbbbbb-0000-0000-0000-00000000e001', 0, 1, 50, 8);
+
+insert into public.swim_entries (
+  id, user_id, activity_id, stroke, distance, pool_length, time_cs, kind
+)
+values
+  ('aaaaaaaa-0000-0000-0000-00000000d001', 'aaaaaaaa-0000-0000-0000-000000000000',
+   'aaaaaaaa-0000-0000-0000-00000000a002', 'free', 50, '25m', 2761, 'race'),
+  ('bbbbbbbb-0000-0000-0000-00000000d001', 'bbbbbbbb-0000-0000-0000-000000000000',
+   'bbbbbbbb-0000-0000-0000-00000000a002', 'fly', 100, '50m', 6245, 'race');

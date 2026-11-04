@@ -41,6 +41,7 @@
     "jest": "~30.5.2",
     "jest-expo": "~58.0.14",
     "prettier": "^3.9.10",
+    "supabase": "3.0.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -51,7 +52,12 @@
     "lint": "expo lint",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "db:types": "supabase gen types --lang typescript --local > src/lib/supabase/database.types.ts && prettier --write src/lib/supabase/database.types.ts"
   },
   "private": true,
   "jest": {

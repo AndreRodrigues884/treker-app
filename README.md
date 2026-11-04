@@ -6,6 +6,7 @@ Gym and swim tracking app for self-coached athletes, built with Expo (SDK 58), T
 
 - Node.js 22 or 24 (LTS)
 - [Expo Go](https://expo.dev/go) on your phone (SDK 58)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/), only for the local database
 
 ## Install
 
@@ -28,3 +29,13 @@ npm run lint       # ESLint + Prettier
 npm run typecheck  # TypeScript
 npm test           # Jest
 ```
+
+## Local database
+
+```bash
+npm run db:start   # start Supabase locally (first run downloads Docker images)
+npm run db:test    # pgTAP tests
+npm run db:stop
+```
+
+See [docs/database.md](docs/database.md) for the tables and security rules.
