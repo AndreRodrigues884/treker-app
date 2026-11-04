@@ -1,36 +1,24 @@
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
 
-import { colors, fontAssets } from '@/theme';
+import { AuthProvider } from '@/features/auth/auth-provider';
+import { RootNavigator } from '@/features/auth/root-navigator';
+import { SplashController } from '@/features/auth/splash-controller';
+import { fontAssets } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(fontAssets);
-
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
-
-  // Keep the splash screen until fonts are ready; on error, fall back to system fonts.
-  if (!fontsLoaded && !fontError) {
-    return null;
-  }
+  // On a font error, fall back to system fonts rather than staying on the splash screen.
+  const fontsReady = fontsLoaded || fontError !== null;
 
   return (
-    <>
+    <AuthProvider>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      />
-    </>
+      <SplashController fontsReady={fontsReady} />
+      {fontsReady && <RootNavigator />}
+    </AuthProvider>
   );
 }

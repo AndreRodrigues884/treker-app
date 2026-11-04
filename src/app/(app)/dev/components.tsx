@@ -161,13 +161,13 @@ function ComponentCatalog() {
         <Section title="TextField">
           <TextField label="Session name" placeholder="Treino A" />
           <TextField
-            label="Weight (numeric)"
-            numeric
+            label="Weight (decimal)"
+            kind="decimal"
             placeholder="0"
             value={weight}
             onChangeText={setWeight}
           />
-          <TextField label="Reps" numeric defaultValue="0" error="Enter at least 1 rep." />
+          <TextField label="Reps" kind="integer" defaultValue="0" error="Enter at least 1 rep." />
         </Section>
 
         <Section title="Chip">

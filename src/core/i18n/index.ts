@@ -27,3 +27,11 @@ export function getMessages(language: Language): Messages {
 export function intlLocale(language: Language): string {
   return intlLocales[language];
 }
+
+// Fills {name} placeholders: interpolate('Hi, {name}', { name: 'Ana' }) -> 'Hi, Ana'.
+// Unknown placeholders are left as they are so missing values are easy to spot.
+export function interpolate(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (placeholder, key: string) =>
+    key in values ? String(values[key]) : placeholder,
+  );
+}

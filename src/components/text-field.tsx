@@ -6,23 +6,33 @@ import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { colors, radii, sizes, spacing, typography } from '@/theme';
 
+// decimal: weights, times and distances. integer: digits only, such as sign-in codes.
+export type TextFieldKind = 'text' | 'email' | 'decimal' | 'integer';
+
 export type TextFieldProps = Omit<TextInputProps, 'style' | 'keyboardType' | 'inputMode'> & {
   label: string;
   error?: string;
-  // Decimal keypad for weights, times and distances.
-  numeric?: boolean;
+  kind?: TextFieldKind;
+};
+
+const keyboards: Record<TextFieldKind, Pick<TextInputProps, 'keyboardType' | 'inputMode'>> = {
+  text: { keyboardType: 'default', inputMode: 'text' },
+  email: { keyboardType: 'email-address', inputMode: 'email' },
+  decimal: { keyboardType: 'decimal-pad', inputMode: 'decimal' },
+  integer: { keyboardType: 'number-pad', inputMode: 'numeric' },
 };
 
 export function TextField({
   label,
   error,
-  numeric = false,
+  kind = 'text',
   onFocus,
   onBlur,
   ...inputProps
 }: TextFieldProps) {
   const labelId = useId();
   const [focused, setFocused] = useState(false);
+  const numeric = kind === 'decimal' || kind === 'integer';
 
   return (
     <View style={styles.container}>
@@ -34,8 +44,7 @@ export function TextField({
         accessibilityLabel={label}
         accessibilityLabelledBy={labelId}
         accessibilityHint={error}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
-        inputMode={numeric ? 'decimal' : 'text'}
+        {...keyboards[kind]}
         placeholderTextColor={colors.dim}
         selectionColor={colors.gym}
         cursorColor={colors.gym}

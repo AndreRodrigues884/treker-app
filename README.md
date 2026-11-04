@@ -12,6 +12,7 @@ Gym and swim tracking app for self-coached athletes, built with Expo (SDK 58), T
 
 ```bash
 npm install
+cp .env.example .env   # then set your PC's local IP and the public key (see docs/auth.md)
 ```
 
 ## Run

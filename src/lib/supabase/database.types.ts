@@ -338,6 +338,7 @@ export type Database = {
           display_name: string | null;
           id: string;
           locale: string;
+          onboarded_at: string | null;
           pool_unit: Database['public']['Enums']['pool_unit'];
           timezone: string;
           updated_at: string;
@@ -351,6 +352,7 @@ export type Database = {
           display_name?: string | null;
           id: string;
           locale?: string;
+          onboarded_at?: string | null;
           pool_unit?: Database['public']['Enums']['pool_unit'];
           timezone?: string;
           updated_at?: string;
@@ -363,6 +365,7 @@ export type Database = {
           display_name?: string | null;
           id?: string;
           locale?: string;
+          onboarded_at?: string | null;
           pool_unit?: Database['public']['Enums']['pool_unit'];
           timezone?: string;
           updated_at?: string;

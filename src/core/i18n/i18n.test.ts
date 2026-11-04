@@ -1,5 +1,5 @@
 import { en } from './en';
-import { getMessages, resolveLanguage } from './index';
+import { getMessages, interpolate, resolveLanguage } from './index';
 import { pt } from './pt';
 
 // Flattens a dictionary into [path, value] pairs, e.g. ['records.prShort', 'PR'].
@@ -52,5 +52,32 @@ describe('getMessages', () => {
   it('returns the dictionary for each language', () => {
     expect(getMessages('en').records.prLabel).toBe('Personal record');
     expect(getMessages('pt').records.prLabel).toBe('Recorde pessoal');
+  });
+});
+
+describe('interpolate', () => {
+  it('fills placeholders', () => {
+    expect(interpolate('Resend in {seconds} s', { seconds: 42 })).toBe('Resend in 42 s');
+    expect(interpolate('{a} and {a}', { a: 'x' })).toBe('x and x');
+  });
+
+  it('leaves unknown placeholders visible', () => {
+    expect(interpolate('Hi, {name}', {})).toBe('Hi, {name}');
+  });
+});
+
+describe('placeholders', () => {
+  // Every translation must use the same {placeholders} as English.
+  const placeholdersOf = (text: unknown) =>
+    typeof text === 'string' ? (text.match(/\{\w+\}/g) ?? []).sort() : [];
+
+  it('pt uses the same placeholders as en', () => {
+    const ptEntries = new Map(entries(pt));
+    for (const [path, text] of entries(en)) {
+      expect({ path, placeholders: placeholdersOf(ptEntries.get(path)) }).toEqual({
+        path,
+        placeholders: placeholdersOf(text),
+      });
+    }
   });
 });

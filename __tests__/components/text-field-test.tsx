@@ -15,9 +15,21 @@ describe('TextField', () => {
     expect(screen.queryByRole('alert')).not.toBeOnTheScreen();
   });
 
-  it('is labelled and uses the decimal keypad when numeric', async () => {
-    await render(<TextField label="Weight" numeric />);
+  it('is labelled and uses the decimal keypad for decimals', async () => {
+    await render(<TextField label="Weight" kind="decimal" />);
 
     expect(screen.getByLabelText('Weight')).toHaveProp('keyboardType', 'decimal-pad');
+  });
+});
+
+describe('TextField kinds', () => {
+  it.each([
+    ['email', 'email-address'],
+    ['integer', 'number-pad'],
+    ['text', 'default'],
+  ] as const)('%s uses the %s keyboard', async (kind, keyboardType) => {
+    await render(<TextField label="Field" kind={kind} />);
+
+    expect(screen.getByLabelText('Field')).toHaveProp('keyboardType', keyboardType);
   });
 });

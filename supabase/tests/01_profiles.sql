@@ -1,7 +1,7 @@
 begin;
 \ir helpers.psql
 
-select plan(12);
+select plan(14);
 
 -- Signup ---------------------------------------------------------------------------------------
 
@@ -16,6 +16,12 @@ select is(
   (select display_name from public.profiles where id = 'bbbbbbbb-0000-0000-0000-000000000000'),
   null,
   'signing up without a display name leaves it empty'
+);
+
+select is(
+  (select onboarded_at from public.profiles where id = 'aaaaaaaa-0000-0000-0000-000000000000'),
+  null,
+  'a new profile has not done onboarding yet'
 );
 
 select tests.create_user(
@@ -42,6 +48,12 @@ select isnt_empty(
   $$ update public.profiles set display_name = 'Ana M', weight_unit = 'lb', timezone = 'Europe/Lisbon'
      where id = 'aaaaaaaa-0000-0000-0000-000000000000' returning id $$,
   'a user updates their own profile'
+);
+
+select isnt_empty(
+  $$ update public.profiles set onboarded_at = now()
+     where id = 'aaaaaaaa-0000-0000-0000-000000000000' returning id $$,
+  'a user marks their own onboarding as done'
 );
 
 select is_empty(

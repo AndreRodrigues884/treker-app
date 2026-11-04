@@ -42,6 +42,7 @@ Uma linha por utilizador, com o mesmo id da conta (`auth.users.id`). **É criada
 | `locale` | Língua da app: `en` ou `pt` |
 | `bodyweight_kg` | Peso corporal. **Privado**: nunca entra em vistas públicas |
 | `visibility` | `private` por defeito |
+| `onboarded_at` | Quando o atleta terminou o onboarding; vazio = a app mostra o onboarding (ver [auth.md](auth.md)) |
 
 ### `exercises` — exercícios
 
