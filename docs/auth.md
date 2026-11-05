@@ -131,7 +131,7 @@ Isto só decide a navegação. **Os dados estão protegidos no Postgres** (RLS),
 - **Renovação do token:** o token é renovado automaticamente só com a app em primeiro plano. O `AppState` para a renovação em segundo plano e retoma-a quando a app volta.
 - **Terminar sessão** apaga a sessão deste telemóvel, mesmo sem rede.
 
-**Limitação até ao passo 6 (offline):** se o perfil não carregar (por exemplo, sem rede), o atleta entra na app e o onboarding volta a ser verificado no arranque seguinte.
+**O perfil vem da base local** (ver [offline.md](offline.md)). No login é descarregado uma vez do servidor; sem rede, a app usa a cópia que já está no telemóvel. Concluir o onboarding e editar o perfil gravam no telemóvel e ficam na fila de envio. Até ao passo 6b essas alterações não chegam ao servidor.
 
 ## Perfil: editar respostas e língua
 

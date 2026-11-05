@@ -21,7 +21,7 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { ChoicesSummary } from '@/features/onboarding/choices-summary';
 import { clearDraft, loadDraft, saveDraft } from '@/features/onboarding/draft';
 import { Question } from '@/features/onboarding/questions';
-import { completeOnboarding } from '@/features/profile/api';
+import { completeOnboarding } from '@/features/profile/repository';
 import { getDeviceRegion, getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
@@ -31,8 +31,8 @@ import { spacing } from '@/theme';
 // is saved on the phone so the questionnaire continues where it stopped.
 export default function OnboardingScreen() {
   const { t, language } = useI18n();
-  const { session, reloadProfile } = useAuth();
-  const userId = session?.user.id ?? null;
+  const { store } = useAuth();
+  const userId = store?.userId ?? null;
 
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
   const [error, setError] = useState<string>();
@@ -69,7 +69,7 @@ export default function OnboardingScreen() {
     return () => subscription.remove();
   });
 
-  if (!draft || !userId) {
+  if (!draft || !userId || !store) {
     return <Screen>{null}</Screen>;
   }
 
@@ -106,16 +106,16 @@ export default function OnboardingScreen() {
     setError(undefined);
     setSaving(true);
     try {
-      await completeOnboarding(userId, result.value);
+      // Saved on the phone (and queued for the server), so it works offline.
+      completeOnboarding(store, result.value);
     } catch (saveError) {
       // The draft stays on the phone, so nothing is lost and the user can try again.
       setError(t.onboarding.errors[classifySaveError(saveError as Error)]);
       setSaving(false);
       return;
     }
+    // The local profile now has onboarded_at, so the router moves on to the app.
     await clearDraft(userId);
-    // The profile now has onboarded_at, so the router moves on to the app.
-    await reloadProfile();
   };
 
   const summary =

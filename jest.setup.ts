@@ -12,3 +12,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Reanimated (used by the side menu) runs on the JS thread in tests. Needs the resolver in
 // test-utils/jest-resolver.js (Reanimated + Worklets chained with React Native's).
 require('react-native-reanimated').setUpTests();
+
+// expo-sqlite backed by Node's built-in SQLite, so the local database runs for real in tests.
+jest.mock('expo-sqlite', () => require('./test-utils/expo-sqlite-mock'));
+
+// expo-crypto's Jest mock has no randomUUID; local rows need real UUIDs.
+jest.mock('expo-crypto', () => ({
+  ...jest.requireActual('expo-crypto'),
+  randomUUID: () => require('node:crypto').randomUUID(),
+}));

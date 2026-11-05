@@ -17,7 +17,7 @@ import {
 } from '@/core/onboarding';
 import { useAuth } from '@/features/auth/auth-provider';
 import { Question } from '@/features/onboarding/questions';
-import { updateProfileAnswers } from '@/features/profile/api';
+import { updateProfile } from '@/features/profile/repository';
 import { getDeviceRegion, getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
@@ -31,7 +31,7 @@ type EditableStep = Exclude<StepId, 'summary'>;
 export default function EditAnswerScreen() {
   const { t, language } = useI18n();
   const params = useLocalSearchParams<{ step?: string }>();
-  const { profile, session, reloadProfile } = useAuth();
+  const { profile, store } = useAuth();
 
   const [step, setStep] = useState<EditableStep>(
     isEditableStep(params.step) ? params.step : 'name',
@@ -47,7 +47,7 @@ export default function EditAnswerScreen() {
   const [followUp, setFollowUp] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  if (!answers || !original || !session) return <Screen>{null}</Screen>;
+  if (!answers || !original || !store) return <Screen>{null}</Screen>;
 
   const ask = (next: EditableStep, rest: EditableStep[]) => {
     setStep(next);
@@ -80,13 +80,13 @@ export default function EditAnswerScreen() {
     setError(undefined);
     setSaving(true);
     try {
-      await updateProfileAnswers(session.user.id, result.value);
+      // Saved on the phone and queued for the server; screens follow the local profile.
+      updateProfile(store, result.value);
     } catch (saveError) {
       setError(t.onboarding.errors[classifySaveError(saveError as Error)]);
       setSaving(false);
       return;
     }
-    await reloadProfile();
     router.back();
   };
 

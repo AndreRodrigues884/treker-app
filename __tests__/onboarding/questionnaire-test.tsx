@@ -5,11 +5,9 @@ import { en } from '@/core/i18n/en';
 import { defaultAnswers, type OnboardingDraft } from '@/core/onboarding';
 import { storageKeys } from '@/lib/storage';
 
+import { localOutbox, localProfile } from '../../test-utils/local-store';
 import { renderApp, resetStorage } from '../../test-utils/render-app';
 import {
-  currentProfile,
-  failProfileUpdates,
-  networkError,
   profileRow,
   resetSupabaseMock,
   supabaseMock,
@@ -185,7 +183,7 @@ describe('final screen', () => {
     await fireEvent.press(screen.getByRole('button', { name: q.summary.enter }));
 
     expect(screen).toHavePathname('/');
-    expect(currentProfile()).toMatchObject({
+    expect(localProfile()).toMatchObject({
       display_name: 'Ana',
       sports: ['gym', 'swim'],
       gym_focus: 'hypertrophy',
@@ -196,28 +194,28 @@ describe('final screen', () => {
       pool_unit: 'm',
       bodyweight_kg: 72.5,
     });
-    // One update with every answer and onboarded_at.
-    expect(supabaseMock.updateProfile).toHaveBeenCalledTimes(1);
-    expect(supabaseMock.updateProfile.mock.calls[0][0]).toHaveProperty('onboarded_at');
-    expect(currentProfile()?.onboarded_at).not.toBeNull();
+    expect(localProfile()?.onboarded_at).not.toBeNull();
+    // One outbox entry with every answer and onboarded_at, for the server (step 6b).
+    const entries = localOutbox();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ table_name: 'profiles', operation: 'upsert' });
+    expect(entries[0].payload).toMatchObject({ weekly_target: 5, gym_focus: 'hypertrophy' });
+    // Nothing is written to the server directly.
+    expect(supabaseMock.updateProfile).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(draftKey)).toBeNull();
   });
 
-  it('without a connection, shows the error and lets the user try again without losing answers', async () => {
+  it('works without a connection: the answers are saved on the phone', async () => {
     await openQuestionnaire();
-    failProfileUpdates(networkError);
+    // From now on every server call fails, as when the phone is offline.
+    supabaseMock.from.mockImplementation(() => {
+      throw new TypeError('Network request failed');
+    });
 
-    await fireEvent.press(screen.getByRole('button', { name: q.summary.enter }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent(q.errors.network);
-    expect(screen).toHavePathname('/onboarding');
-    expect(screen.getByText('Gym, Swimming')).toBeOnTheScreen();
-    expect(await AsyncStorage.getItem(draftKey)).not.toBeNull();
-
-    failProfileUpdates(null);
     await fireEvent.press(screen.getByRole('button', { name: q.summary.enter }));
 
     expect(screen).toHavePathname('/');
-    expect(currentProfile()?.weekly_target).toBe(5);
+    expect(localProfile()?.weekly_target).toBe(5);
+    expect(localOutbox()).toHaveLength(1);
   });
 });

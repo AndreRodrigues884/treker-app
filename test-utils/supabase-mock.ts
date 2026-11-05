@@ -3,21 +3,12 @@
 // and call resetSupabaseMock() in beforeEach. Only the calls the app makes are implemented.
 import type { Session } from '@supabase/supabase-js';
 
+import type { Tables } from '@/lib/supabase/database.types';
+
 type AuthListener = (event: string, session: Session | null) => void;
 
-export type ProfileRow = {
-  id: string;
-  display_name: string | null;
-  weight_unit: 'kg' | 'lb';
-  pool_unit: 'm' | 'yd';
-  bodyweight_kg: number | null;
-  onboarded_at: string | null;
-  sports: ('gym' | 'swim')[] | null;
-  gym_focus: 'strength' | 'hypertrophy' | 'maintenance' | null;
-  swim_style: 'competitive' | 'fitness' | null;
-  default_pool_length: '25m' | '50m' | '25yd' | null;
-  weekly_target: number | null;
-};
+// The whole server row, as select('*') returns it.
+export type ProfileRow = Tables<'profiles'>;
 
 // What supabase-js returns when the phone has no connection.
 export const networkError = {
@@ -113,7 +104,9 @@ export function failProfileUpdates(error: object | null) {
   state.updateError = error;
 }
 
-export function currentProfile(): ProfileRow | null {
+// The profile as stored on the (mock) server; the app's own copy is in the local database
+// (see test-utils/local-store.ts).
+export function serverProfileState(): ProfileRow | null {
   return state.profile;
 }
 
@@ -140,6 +133,11 @@ export function profileRow(overrides: Partial<ProfileRow> = {}): ProfileRow {
     display_name: null,
     weight_unit: 'kg',
     pool_unit: 'm',
+    timezone: 'UTC',
+    locale: 'en',
+    visibility: 'private',
+    created_at: '2026-11-01T10:00:00Z',
+    updated_at: '2026-11-01T10:00:00Z',
     bodyweight_kg: null,
     onboarded_at: null,
     sports: null,

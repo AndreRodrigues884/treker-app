@@ -10,6 +10,7 @@ import TodayScreen from '@/app/(app)/(drawer)/index';
 import ProfileScreen from '@/app/(app)/(drawer)/profile';
 import RecordsScreen from '@/app/(app)/(drawer)/records';
 import AppLayout from '@/app/(app)/_layout';
+import LocalDatabaseRoute from '@/app/(app)/dev/local-db';
 import DeleteAccountScreen from '@/app/(app)/settings/delete-account';
 import EditAnswerScreen from '@/app/(app)/settings/edit';
 import LanguageScreen from '@/app/(app)/settings/language';
@@ -26,6 +27,8 @@ import { IntroProvider } from '@/features/intro/intro-state';
 import { LanguageProvider } from '@/lib/i18n';
 import { storageKeys } from '@/lib/storage';
 
+import { resetLocalDatabases } from './local-store';
+
 function RootLayout() {
   return (
     <LanguageProvider>
@@ -38,8 +41,9 @@ function RootLayout() {
   );
 }
 
-// Clears the phone storage; by default the intro counts as already seen.
+// Clears the phone storage and local databases; by default the intro counts as already seen.
 export async function resetStorage(options: { introSeen?: boolean } = {}) {
+  resetLocalDatabases();
   await AsyncStorage.clear();
   if (options.introSeen ?? true) {
     await AsyncStorage.setItem(storageKeys.introSeen, 'true');
@@ -66,6 +70,7 @@ export function renderApp(initialUrl = '/') {
       '(app)/start': StartWorkoutScreen,
       '(app)/settings/edit': EditAnswerScreen,
       '(app)/settings/language': LanguageScreen,
+      '(app)/dev/local-db': LocalDatabaseRoute,
       '(app)/settings/delete-account': DeleteAccountScreen,
     },
     { initialUrl },

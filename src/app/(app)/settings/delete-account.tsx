@@ -34,9 +34,11 @@ export default function DeleteAccountScreen() {
     setDeleting(true);
     try {
       const userId = session?.user.id;
-      await deleteMyAccount();
-      // The session is gone, so the router moves to the email screen.
-      if (userId) await clearDraft(userId);
+      if (!userId) return;
+      // Deletes the account on the server, signs out and deletes the local database file. The
+      // session is gone, so the router moves to the email screen.
+      await deleteMyAccount(userId);
+      await clearDraft(userId);
     } catch (deleteError) {
       setError(copy.errors[classifySaveError(deleteError as Error)]);
       setDeleting(false);

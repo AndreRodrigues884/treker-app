@@ -8,23 +8,19 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppText, Divider, ProgressBar } from '@/components';
 import { interpolate } from '@/core/i18n';
+import { useWorkoutsThisWeek } from '@/features/activities/use-workouts-this-week';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useI18n } from '@/lib/i18n';
 import { colors, radii, spacing } from '@/theme';
-
-// Workouts are logged from the next phase on; until then the week starts at zero.
-const WORKOUTS_THIS_WEEK = 0;
 
 // The side menu: logo, the athlete's name and weekly goal on top, the screens, and the app
 // version at the bottom.
 export function DrawerContent(props: DrawerContentComponentProps) {
   const { t } = useI18n();
   const { profile } = useAuth();
+  const done = useWorkoutsThisWeek() ?? 0;
   const target = profile?.weekly_target ?? null;
-  const goal =
-    target !== null
-      ? interpolate(t.today.weeklyProgress, { done: WORKOUTS_THIS_WEEK, target })
-      : null;
+  const goal = target !== null ? interpolate(t.today.weeklyProgress, { done, target }) : null;
   const version = Constants.expoConfig?.version ?? '?';
 
   return (
@@ -37,7 +33,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             <AppText variant="caption" color="muted">
               {goal}
             </AppText>
-            <ProgressBar value={WORKOUTS_THIS_WEEK / target} accessibilityLabel={goal} />
+            <ProgressBar value={done / target} accessibilityLabel={goal} />
           </View>
         )}
       </View>
