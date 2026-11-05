@@ -1,4 +1,5 @@
 import type { Session } from '@supabase/supabase-js';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createContext,
   use,
@@ -9,24 +10,22 @@ import {
   type ReactNode,
 } from 'react';
 
-import { fetchProfile } from '@/features/profile/api';
-import { getProfile, saveProfileFromServer, type ProfileRow } from '@/features/profile/repository';
-import { deleteLocalStore, openLocalStore, useLocalQuery, type LocalStore } from '@/lib/local-db';
+import { getProfile, type ProfileRow } from '@/features/profile/repository';
+import { createDataContext, type DataContext } from '@/lib/data/context';
+import { queryKeys } from '@/lib/data/query-keys';
 import { startAutoRefreshWhileActive, supabase } from '@/lib/supabase/client';
 
 export type AuthState = {
-  // True until the stored session (and, when signed in, the local profile) has been read.
+  // True until the stored session (and, when signed in, the profile) has been read.
   isLoading: boolean;
   session: Session | null;
-  // The signed-in athlete's local database (null when signed out).
-  store: LocalStore | null;
-  // Read from the local database. Null when signed out, or when it was never downloaded
-  // (first sign-in without a connection).
+  // What the repositories need for the signed-in athlete (null when signed out).
+  data: DataContext | null;
+  // From the server, cached by TanStack Query. Null when signed out, or when it could not be
+  // loaded (for example without a connection).
   profile: ProfileRow | null;
   needsOnboarding: boolean;
   signOut: () => Promise<void>;
-  // Dev tool: deletes the local database and starts again from the server's profile.
-  resetLocalData: () => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -37,95 +36,63 @@ export function useAuth(): AuthState {
   return auth;
 }
 
-// The signed-in athlete's local database. Only for screens inside (app) and (onboarding).
-export function useLocalStore(): LocalStore {
-  const { store } = useAuth();
-  if (!store) throw new Error('No local database: nobody is signed in');
-  return store;
-}
-
-// Downloads the profile into the local database once per sign-in (full sync comes in step 6b).
-// Without a connection the phone keeps using what it already has.
-async function importServerProfile(store: LocalStore): Promise<void> {
-  try {
-    const row = await fetchProfile(store.userId);
-    if (row) saveProfileFromServer(store, row);
-  } catch {
-    // Offline or server error: keep the local copy.
-  }
+// The signed-in athlete, for the data hooks. Only for screens inside (app) and (onboarding).
+export function useDataContext(): DataContext {
+  const { data } = useAuth();
+  if (!data) throw new Error('Nobody is signed in');
+  return data;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  // Bumped when the local database is deleted, to open a fresh one.
-  const [generation, setGeneration] = useState(0);
-  // The user whose profile was imported at least once (loading only counts the first time).
-  const [importedFor, setImportedFor] = useState<string | null>(null);
 
   const userId = session?.user.id ?? null;
-  // openLocalStore returns the already open database for a user, so this is safe to repeat.
-  const store = useMemo(
-    () => (userId ? openLocalStore(userId) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [userId, generation],
-  );
-  const importKey = userId ? `${userId}:${generation}` : null;
+  const data = useMemo(() => (userId ? createDataContext(userId) : null), [userId]);
 
   useEffect(() => {
     const stopAutoRefresh = startAutoRefreshWhileActive();
     // Fires INITIAL_SESSION with the stored session right away, then every sign-in, sign-out
     // and token refresh. Keep this callback synchronous: Supabase calls inside it can deadlock.
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Signing out (or deleting the account, or the session expiring) forgets every cached
+      // answer, so the next account on this phone never sees the previous one's data.
+      if (event === 'SIGNED_OUT') queryClient.clear();
       setSession(nextSession);
       setSessionLoaded(true);
     });
     return () => {
-      data.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
       stopAutoRefresh();
     };
-  }, []);
+  }, [queryClient]);
 
-  useEffect(() => {
-    if (!store || !importKey) return;
-    let current = true;
-    const importingFor = store.userId;
-    void importServerProfile(store).then(() => {
-      if (current) setImportedFor(importingFor);
-    });
-    return () => {
-      current = false;
-    };
-  }, [store, importKey]);
-
-  const profile = useLocalQuery(store, getProfile, ['profiles']);
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profile(userId ?? 'signed-out'),
+    queryFn: () => getProfile(data!),
+    enabled: data !== null,
+  });
 
   const signOut = useCallback(async () => {
-    // 'local' signs out this device even without a connection. The local database stays on the
-    // phone for the next sign-in.
+    // 'local' signs out this device even without a connection.
     await supabase.auth.signOut({ scope: 'local' });
-  }, []);
+    queryClient.clear();
+  }, [queryClient]);
 
-  const resetLocalData = useCallback(() => {
-    if (!userId) return;
-    deleteLocalStore(userId);
-    setGeneration((value) => value + 1);
-  }, [userId]);
-
-  // After the dev reset, the screens stay and the profile reappears when imported again.
-  const profileReady = userId !== null && importedFor === userId && profile !== undefined;
-  const isLoading = !sessionLoaded || (userId !== null && !profileReady);
-  const currentProfile = profileReady ? (profile ?? null) : null;
+  // A failed profile load (offline) still lets the athlete in; it is fetched again when the
+  // connection comes back.
+  const profileSettled = profileQuery.isSuccess || profileQuery.isError;
+  const isLoading = !sessionLoaded || (userId !== null && !profileSettled);
+  const profile = userId !== null ? (profileQuery.data ?? null) : null;
 
   const value: AuthState = {
     isLoading,
     session,
-    store,
-    profile: currentProfile,
-    needsOnboarding:
-      session !== null && currentProfile !== null && currentProfile.onboarded_at === null,
+    data,
+    profile,
+    needsOnboarding: session !== null && profile !== null && profile.onboarded_at === null,
     signOut,
-    resetLocalData,
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;

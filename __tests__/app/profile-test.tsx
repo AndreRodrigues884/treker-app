@@ -5,9 +5,14 @@ import { en } from '@/core/i18n/en';
 import { pt } from '@/core/i18n/pt';
 import { storageKeys } from '@/lib/storage';
 
-import { localOutbox, localProfile } from '../../test-utils/local-store';
 import { renderApp, resetStorage } from '../../test-utils/render-app';
-import { onboardedProfile, resetSupabaseMock, supabaseMock } from '../../test-utils/supabase-mock';
+import {
+  goOffline,
+  onboardedProfile,
+  resetSupabaseMock,
+  serverProfileState,
+  supabaseMock,
+} from '../../test-utils/supabase-mock';
 
 jest.mock('@/lib/supabase/client', () => require('../../test-utils/supabase-mock').clientModule);
 
@@ -49,14 +54,13 @@ describe('editing answers', () => {
     await save();
 
     expect(screen.getByRole('alert')).toHaveTextContent(q.errors.nameRequired);
-    expect(localOutbox()).toEqual([]);
+    expect(supabaseMock.updateProfile).not.toHaveBeenCalled();
 
     await fireEvent.changeText(screen.getByLabelText(q.name.label), 'Ana Silva');
     await save();
 
-    expect(localProfile()?.display_name).toBe('Ana Silva');
-    expect(localOutbox()).toHaveLength(1);
-    expect(supabaseMock.updateProfile).not.toHaveBeenCalled();
+    expect(serverProfileState()?.display_name).toBe('Ana Silva');
+    expect(supabaseMock.updateProfile).toHaveBeenCalledTimes(1);
     expect(screen).toHavePathname('/profile');
     expect(screen.getByRole('button', { name: `${en.profile.name}, Ana Silva` })).toBeOnTheScreen();
   });
@@ -70,7 +74,7 @@ describe('editing answers', () => {
 
     expect(screen.getByText(en.profile.editMore)).toBeOnTheScreen();
     expect(screen.getByRole('header', { name: q.swimStyle.title })).toBeOnTheScreen();
-    expect(localOutbox()).toEqual([]);
+    expect(supabaseMock.updateProfile).not.toHaveBeenCalled();
 
     await save();
     expect(screen.getByRole('alert')).toHaveTextContent(q.errors.swimStyleRequired);
@@ -82,8 +86,8 @@ describe('editing answers', () => {
     await fireEvent.press(screen.getByLabelText(q.poolLength.longCourseHint, { exact: false }));
     await save();
 
-    expect(localOutbox()).toHaveLength(1);
-    expect(localProfile()).toMatchObject({
+    expect(supabaseMock.updateProfile).toHaveBeenCalledTimes(1);
+    expect(serverProfileState()).toMatchObject({
       sports: ['gym', 'swim'],
       gym_focus: 'strength',
       swim_style: 'competitive',
@@ -107,7 +111,28 @@ describe('editing answers', () => {
     await fireEvent.press(screen.getByRole('checkbox', { name: q.sports.gym }));
     await save();
 
-    expect(localProfile()).toMatchObject({ sports: ['swim'], gym_focus: null });
+    expect(serverProfileState()).toMatchObject({ sports: ['swim'], gym_focus: null });
+  });
+
+  it('without a connection: shows the error with "Try again" and keeps what was typed', async () => {
+    await openProfile();
+    await fireEvent.press(screen.getByRole('button', { name: `${en.profile.name}, Ana` }));
+    await fireEvent.changeText(screen.getByLabelText(q.name.label), 'Ana Silva');
+    goOffline();
+
+    await save();
+
+    expect(screen).toHavePathname('/settings/edit');
+    expect(screen.getByRole('alert')).toHaveTextContent(en.common.errors.network);
+    expect(screen.getByLabelText(q.name.label)).toHaveDisplayValue('Ana Silva');
+    expect(serverProfileState()?.display_name).toBe('Ana');
+
+    goOffline(false);
+    await fireEvent.press(screen.getByRole('button', { name: en.common.retry }));
+
+    expect(serverProfileState()?.display_name).toBe('Ana Silva');
+    expect(screen).toHavePathname('/profile');
+    expect(screen.getByRole('button', { name: `${en.profile.name}, Ana Silva` })).toBeOnTheScreen();
   });
 });
 

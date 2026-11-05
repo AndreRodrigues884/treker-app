@@ -179,9 +179,24 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
+### Apagar uma atividade
+
+`public.delete_activity(p_activity_id uuid)`, chamada pela app por `rpc` num só pedido:
+
+- **Numa só transação**, marca `deleted_at` na atividade, nas suas séries e nos seus tempos de natação, todos com a mesma hora. Ou fica tudo apagado, ou nada: uma falha de rede a meio nunca deixa uma atividade sem séries a contar no "Hoje".
+- **Os recordes são reconstruídos uma só vez por chave.** Enquanto marca as séries e os tempos, a função liga a marca local à transação `treker.defer_record_rebuild`, e os triggers das séries e dos tempos não reconstroem. Depois marca a atividade, e o trigger da atividade reconstrói cada chave dos seus filhos uma vez. Os utilizadores não conseguem ligar essa marca por conta própria: a API só expõe funções do schema `public`, e cada pedido é uma transação.
+- **Repetir não tem efeitos:** uma atividade já apagada é ignorada, por isso tentar outra vez depois de uma falha de rede é seguro.
+- É `security invoker`, com `search_path` vazio, e só pode ser executada por `authenticated`. Corre como o próprio atleta, por isso o RLS aplica-se: a atividade de outro utilizador não é encontrada e a chamada dá erro (`no_data_found`).
+- Testes em `supabase/tests/14_delete_activity.sql`:
+  - apaga a atividade e os filhos de uma vez;
+  - os recordes e as estatísticas ficam certos, com uma reconstrução por chave;
+  - repetir não muda nada;
+  - não apaga a atividade de outro utilizador;
+  - o anónimo não pode chamar a função.
+
 ### Apagar conta
 
-`public.delete_my_account()` é a única função que a app chama diretamente (por `rpc`):
+`public.delete_my_account()` também é chamada diretamente pela app (por `rpc`):
 
 - É `security definer`, com `search_path` vazio e fixo.
 - Só pode ser executada por `authenticated`; o anónimo não pode.
@@ -220,7 +235,7 @@ Contam todas as entradas não apagadas, de prova e de treino. Piscinas de 25 m, 
 - **Reconstruir uma chave** apaga os recordes dessa chave e percorre o histórico por ordem (`local_date`, `started_at`, ordem do exercício, `set_number`). Grava um recorde sempre que o melhor anterior é batido. No gym recalcula também as `exercise_stats`.
 - **Triggers por instrução** em `gym_sets` e `swim_entries` juntam as chaves tocadas por cada insert, update ou delete e reconstroem cada chave **uma só vez por instrução**, mesmo que a instrução mexa em 50 séries. Alterações que não afetam recordes (como o RPE) não reconstroem nada.
 - **Também reconstrói quando:**
-  - uma atividade muda de `local_date`, `started_at` ou `bodyweight_kg`, ou é apagada;
+  - uma atividade muda de `local_date`, `started_at` ou `bodyweight_kg`, ou é apagada (com `delete_activity`, uma só vez por chave, ver [Apagar uma atividade](#apagar-uma-atividade));
   - um exercício muda de `unit`, `tracks_load` ou `adds_bodyweight`.
 - **Gravações em simultâneo:** cada reconstrução pede um bloqueio por utilizador (`pg_advisory_xact_lock`) que dura até ao fim da transação. Duas gravações do mesmo atleta ao mesmo tempo esperam uma pela outra, e a segunda já vê os dados da primeira. Por isso nunca há recordes duplicados.
 

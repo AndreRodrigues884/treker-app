@@ -13,11 +13,19 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // test-utils/jest-resolver.js (Reanimated + Worklets chained with React Native's).
 require('react-native-reanimated').setUpTests();
 
-// expo-sqlite backed by Node's built-in SQLite, so the local database runs for real in tests.
-jest.mock('expo-sqlite', () => require('./test-utils/expo-sqlite-mock'));
-
-// expo-crypto's Jest mock has no randomUUID; local rows need real UUIDs.
+// expo-crypto's Jest mock has no randomUUID; rows created on the phone need real UUIDs.
 jest.mock('expo-crypto', () => ({
   ...jest.requireActual('expo-crypto'),
   randomUUID: () => require('node:crypto').randomUUID(),
 }));
+
+// NetInfo's own Jest mock (always connected unless a test changes it).
+jest.mock('@react-native-community/netinfo', () =>
+  require('@react-native-community/netinfo/jest/netinfo-mock.js'),
+);
+
+// TanStack Query batches UI updates with setTimeout(0), which act() does not wait for; a promise
+// microtask is flushed by act, so screens update as soon as a request answers.
+require('@tanstack/react-query').notifyManager.setScheduler((callback: () => void) => {
+  void Promise.resolve().then(callback);
+});

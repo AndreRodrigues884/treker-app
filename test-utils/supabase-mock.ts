@@ -1,11 +1,17 @@
 // In-memory stand-in for src/lib/supabase/client in Jest tests. Use it with:
 //   jest.mock('@/lib/supabase/client', () => require('<path>/test-utils/supabase-mock').clientModule);
-// and call resetSupabaseMock() in beforeEach. Only the calls the app makes are implemented.
+// and call resetSupabaseMock() in beforeEach.
+//
+// Each table is a list of rows. `from(table)` supports the subset of the supabase-js query
+// builder the repositories use: select (with filters, order, single/maybeSingle and head counts),
+// upsert by id and update. Like the server, it fills created_at/updated_at. It does not check RLS
+// or constraints: those are tested in pgTAP (supabase/tests).
 import type { Session } from '@supabase/supabase-js';
 
 import type { Tables } from '@/lib/supabase/database.types';
 
 type AuthListener = (event: string, session: Session | null) => void;
+type Row = Record<string, unknown>;
 
 // The whole server row, as select('*') returns it.
 export type ProfileRow = Tables<'profiles'>;
@@ -28,11 +34,29 @@ export const testSession = {
   user: { id: TEST_USER_ID, email: 'ana@example.com' },
 } as unknown as Session;
 
+const SERVER_NOW = '2026-11-04T10:00:00.000Z';
+
+// Column defaults the server applies on insert.
+const DEFAULTS: Record<string, Row> = {
+  activities: {
+    ended_at: null,
+    notes: null,
+    visibility: 'private',
+    bodyweight_kg: null,
+    deleted_at: null,
+  },
+  gym_sets: { deleted_at: null },
+  swim_entries: { deleted_at: null },
+  exercises: { slug: null, archived: false, deleted_at: null },
+};
+
 const state = {
   session: null as Session | null,
-  profile: null as ProfileRow | null,
-  // When set, profile updates fail with this error (see failProfileUpdates).
-  updateError: null as object | null,
+  tables: {} as Record<string, Row[]>,
+  // When set, every database request fails with this error (see goOffline).
+  failure: null as object | null,
+  // When set, updates to profiles fail with this error (see failProfileUpdates).
+  profileUpdateError: null as object | null,
   // Milliseconds before a profile read answers, like a real network (see delayProfileReads).
   profileDelayMs: 0,
   listeners: new Set<AuthListener>(),
@@ -45,20 +69,189 @@ function emit(event: string, session: Session | null) {
 
 const ok = { error: null };
 
-// from('profiles').update(values).eq('id', id); shared so tests can count the updates.
-const updateProfile = jest.fn((values: Partial<ProfileRow>) => ({
-  eq: async () => {
-    if (state.updateError) return { error: state.updateError };
-    if (state.profile) state.profile = { ...state.profile, ...values };
-    return ok;
-  },
-}));
+function rowsOf(table: string): Row[] {
+  state.tables[table] ??= [];
+  return state.tables[table];
+}
+
+type Filter = (row: Row) => boolean;
+
+type Result = { data: unknown; error: unknown; count?: number | null };
+
+class Query {
+  private operation: 'select' | 'upsert' | 'update' = 'select';
+  private values: Row | Row[] = {};
+  private filters: Filter[] = [];
+  private orders: { column: string; ascending: boolean }[] = [];
+  private returnRows = false;
+  private headCount = false;
+  private mode: 'many' | 'single' | 'maybeSingle' = 'many';
+
+  constructor(private readonly table: string) {}
+
+  select(_columns = '*', options: { count?: string; head?: boolean } = {}) {
+    if (this.operation === 'select') {
+      this.headCount = options.head === true;
+    } else {
+      this.returnRows = true;
+    }
+    return this;
+  }
+
+  upsert(values: Row | Row[], _options?: { onConflict?: string }) {
+    this.operation = 'upsert';
+    this.values = values;
+    supabaseMock.writes.push({ table: this.table, operation: 'upsert', values });
+    return this;
+  }
+
+  update(values: Row) {
+    this.operation = 'update';
+    this.values = values;
+    supabaseMock.writes.push({ table: this.table, operation: 'update', values });
+    if (this.table === 'profiles') supabaseMock.updateProfile(values);
+    return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.filters.push((row) => row[column] === value);
+    return this;
+  }
+
+  is(column: string, value: null) {
+    this.filters.push((row) => (row[column] ?? null) === value);
+    return this;
+  }
+
+  gte(column: string, value: string | number) {
+    this.filters.push((row) => (row[column] as string | number) >= value);
+    return this;
+  }
+
+  lte(column: string, value: string | number) {
+    this.filters.push((row) => (row[column] as string | number) <= value);
+    return this;
+  }
+
+  order(column: string, options: { ascending?: boolean } = {}) {
+    this.orders.push({ column, ascending: options.ascending ?? true });
+    return this;
+  }
+
+  single() {
+    this.mode = 'single';
+    return this;
+  }
+
+  maybeSingle() {
+    this.mode = 'maybeSingle';
+    return this;
+  }
+
+  // Awaiting the builder runs the request, like supabase-js.
+  then<R1 = Result, R2 = never>(
+    onFulfilled?: ((value: Result) => R1 | PromiseLike<R1>) | null,
+    onRejected?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
+  ): Promise<R1 | R2> {
+    return this.execute().then(onFulfilled, onRejected);
+  }
+
+  private async execute(): Promise<Result> {
+    if (this.table === 'profiles' && this.operation === 'select' && state.profileDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, state.profileDelayMs));
+    }
+    if (state.failure) return { data: null, error: state.failure, count: null };
+    if (this.table === 'profiles' && this.operation === 'update' && state.profileUpdateError) {
+      return { data: null, error: state.profileUpdateError };
+    }
+
+    const rows = rowsOf(this.table);
+    let result: Row[];
+
+    if (this.operation === 'upsert') {
+      result = (Array.isArray(this.values) ? this.values : [this.values]).map((values) => {
+        const existing = rows.find((row) => row.id === values.id);
+        if (existing) {
+          Object.assign(existing, values, { updated_at: SERVER_NOW });
+          return existing;
+        }
+        const inserted = {
+          ...DEFAULTS[this.table],
+          ...values,
+          created_at: SERVER_NOW,
+          updated_at: SERVER_NOW,
+        };
+        rows.push(inserted);
+        return inserted;
+      });
+    } else {
+      result = rows.filter((row) => this.filters.every((filter) => filter(row)));
+      if (this.operation === 'update') {
+        for (const row of result) Object.assign(row, this.values, { updated_at: SERVER_NOW });
+      }
+    }
+
+    for (const { column, ascending } of [...this.orders].reverse()) {
+      result = [...result].sort((a, b) => {
+        const left = a[column] as string | number;
+        const right = b[column] as string | number;
+        return (left < right ? -1 : left > right ? 1 : 0) * (ascending ? 1 : -1);
+      });
+    }
+
+    if (this.headCount) return { data: null, error: null, count: result.length };
+    if (this.operation !== 'select' && !this.returnRows) return { data: null, error: null };
+
+    const copies = result.map((row) => ({ ...row }));
+    if (this.mode === 'single') {
+      return copies.length === 1
+        ? { data: copies[0], error: null }
+        : {
+            data: null,
+            error: {
+              code: 'PGRST116',
+              message: 'JSON object requested, multiple (or no) rows returned',
+            },
+          };
+    }
+    if (this.mode === 'maybeSingle') return { data: copies[0] ?? null, error: null };
+    return { data: copies, error: null };
+  }
+}
 
 export const supabaseMock = {
-  updateProfile,
-  // rpc('delete_my_account') removes the profile, like the cascade in Postgres.
-  rpc: jest.fn(async (fn: string) => {
-    if (fn === 'delete_my_account') state.profile = null;
+  // Every write, in order, for assertions.
+  writes: [] as { table: string; operation: 'upsert' | 'update'; values: Row | Row[] }[],
+  // Called on every update to profiles, for assertions.
+  updateProfile: jest.fn((_values: Row) => {}),
+  // rpc('delete_activity') marks the activity and its children deleted at once (a no-op when
+  // already deleted; P0002 when not the user's). rpc('delete_my_account') removes the user's
+  // rows, like the cascade in Postgres.
+  rpc: jest.fn(async (fn: string, args: Row = {}) => {
+    if (state.failure) return { data: null, error: state.failure };
+    if (fn === 'delete_activity') {
+      const activity = rowsOf('activities').find(
+        (row) => row.id === args.p_activity_id && row.user_id === TEST_USER_ID,
+      );
+      if (!activity) {
+        return { data: null, error: { code: 'P0002', message: 'activity not found' } };
+      }
+      if (activity.deleted_at) return { data: null, ...ok };
+      for (const table of ['gym_sets', 'swim_entries']) {
+        for (const row of rowsOf(table)) {
+          if (row.activity_id === activity.id && !row.deleted_at) row.deleted_at = SERVER_NOW;
+        }
+      }
+      activity.deleted_at = SERVER_NOW;
+      return { data: null, ...ok };
+    }
+    if (fn === 'delete_my_account') {
+      for (const table of Object.keys(state.tables)) {
+        state.tables[table] = state.tables[table].filter(
+          (row) => row.user_id !== TEST_USER_ID && row.id !== TEST_USER_ID,
+        );
+      }
+    }
     return { data: null, ...ok };
   }),
   auth: {
@@ -80,50 +273,48 @@ export const supabaseMock = {
     startAutoRefresh: jest.fn(),
     stopAutoRefresh: jest.fn(),
   },
-  // from('profiles').select(...).eq('id', id).maybeSingle() and .update(values).eq('id', id)
-  from: jest.fn((_table: string) => ({
-    select: () => ({
-      eq: () => ({
-        maybeSingle: async () => {
-          if (state.profileDelayMs > 0) {
-            await new Promise((resolve) => setTimeout(resolve, state.profileDelayMs));
-          }
-          return { data: state.profile, ...ok };
-        },
-      }),
-    }),
-    update: updateProfile,
-  })),
+  from: jest.fn((table: string) => new Query(table)),
 };
-
-export function delayProfileReads(ms: number) {
-  state.profileDelayMs = ms;
-}
-
-export function failProfileUpdates(error: object | null) {
-  state.updateError = error;
-}
-
-// The profile as stored on the (mock) server; the app's own copy is in the local database
-// (see test-utils/local-store.ts).
-export function serverProfileState(): ProfileRow | null {
-  return state.profile;
-}
 
 export const clientModule = {
   supabase: supabaseMock,
   startAutoRefreshWhileActive: () => () => {},
 };
 
+// The rows of a table on the (mock) server.
+export function serverRows<T = Row>(table: string): T[] {
+  return rowsOf(table) as T[];
+}
+
+export function serverProfileState(): ProfileRow | null {
+  return (rowsOf('profiles')[0] as ProfileRow | undefined) ?? null;
+}
+
+// Every database request fails as without a connection (null: back online).
+export function goOffline(offline = true) {
+  state.failure = offline ? networkError : null;
+}
+
+export function failProfileUpdates(error: object | null) {
+  state.profileUpdateError = error;
+}
+
+export function delayProfileReads(ms: number) {
+  state.profileDelayMs = ms;
+}
+
 export function resetSupabaseMock(
   options: { signedIn?: boolean; profile?: ProfileRow | null } = {},
 ) {
   state.session = options.signedIn ? testSession : null;
-  state.profile = options.profile ?? null;
-  state.updateError = null;
+  state.tables = { profiles: options.profile ? [{ ...options.profile }] : [] };
+  state.failure = null;
+  state.profileUpdateError = null;
   state.profileDelayMs = 0;
   state.listeners.clear();
+  supabaseMock.writes = [];
   jest.clearAllMocks();
+  supabaseMock.from.mockImplementation((table: string) => new Query(table));
 }
 
 // A profile right after signup (onboarding not done).

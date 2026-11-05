@@ -2,7 +2,6 @@ import {
   addedSteps,
   answersFromProfile,
   buildProfileUpdate,
-  classifySaveError,
   defaultAnswers,
   isEditableStep,
   nextStep,
@@ -197,16 +196,6 @@ describe('buildProfileUpdate', () => {
       ok: false,
       error: { step: 'gymFocus', error: 'gymFocusRequired' },
     });
-  });
-});
-
-describe('classifySaveError', () => {
-  it('detects a missing connection', () => {
-    expect(classifySaveError({ message: 'TypeError: Network request failed' })).toBe('network');
-  });
-
-  it('treats anything else as generic', () => {
-    expect(classifySaveError({ message: 'new row violates check constraint' })).toBe('generic');
   });
 });
 

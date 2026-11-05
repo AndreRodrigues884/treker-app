@@ -7,6 +7,12 @@ export const pt: Messages = {
     next: 'Seguinte',
     save: 'Guardar',
     close: 'Fechar',
+    retry: 'Tentar outra vez',
+    offline: 'Sem ligação',
+    errors: {
+      network: 'Sem ligação. Verifica a internet e tenta outra vez.',
+      generic: 'Algo correu mal. Tenta outra vez.',
+    },
   },
   nav: {
     today: 'Hoje',
@@ -92,7 +98,7 @@ export const pt: Messages = {
         title: 'Recordes em que podes confiar',
         body: 'Piscina curta e longa, nunca misturadas.',
       },
-      offline: { title: 'Funciona sem rede. Os dados são teus.' },
+      privacy: { title: 'Privado por defeito. Os dados são teus.' },
     },
     demo: {
       benchPress: 'Supino plano',
@@ -101,7 +107,7 @@ export const pt: Messages = {
       today: 'Hoje',
       shortCourse: 'Piscina curta',
       longCourse: 'Piscina longa',
-      savedOnPhone: 'Guardado no telemóvel',
+      deleteAnytime: 'Apaga a conta quando quiseres',
       privateByDefault: 'Privado por defeito',
       exportAnytime: 'Exporta quando quiseres (CSV)',
     },

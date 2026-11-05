@@ -13,8 +13,8 @@ import { AppText, Button, Screen } from '@/components';
 import { interpolate } from '@/core/i18n';
 import {
   LastTimeIllustration,
-  OfflineIllustration,
   OneLogIllustration,
+  PrivacyIllustration,
   RecordsIllustration,
 } from '@/features/intro/illustrations';
 import { useIntro } from '@/features/intro/intro-state';
@@ -22,13 +22,13 @@ import { useI18n } from '@/lib/i18n';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
 import { colors, radii, spacing } from '@/theme';
 
-type PageKey = 'oneLog' | 'lastTime' | 'records' | 'offline';
+type PageKey = 'oneLog' | 'lastTime' | 'records' | 'privacy';
 
 const PAGES: { key: PageKey; Illustration: ComponentType }[] = [
   { key: 'oneLog', Illustration: OneLogIllustration },
   { key: 'lastTime', Illustration: LastTimeIllustration },
   { key: 'records', Illustration: RecordsIllustration },
-  { key: 'offline', Illustration: OfflineIllustration },
+  { key: 'privacy', Illustration: PrivacyIllustration },
 ];
 
 const DOT_SIZE = spacing[2];

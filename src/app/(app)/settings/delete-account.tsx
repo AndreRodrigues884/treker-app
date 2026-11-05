@@ -6,10 +6,10 @@ import { StyleSheet, View } from 'react-native';
 import { AppText, Button, Card, Icon, Screen, TextField } from '@/components';
 import { isDeleteConfirmed } from '@/core/account';
 import { interpolate } from '@/core/i18n';
-import { classifySaveError } from '@/core/onboarding';
+import { classifyRequestError } from '@/core/errors';
 import { useAuth } from '@/features/auth/auth-provider';
 import { clearDraft } from '@/features/onboarding/draft';
-import { deleteMyAccount } from '@/features/profile/api';
+import { deleteAccount } from '@/features/profile/repository';
 import { useI18n } from '@/lib/i18n';
 import { colors, radii, spacing } from '@/theme';
 
@@ -35,12 +35,12 @@ export default function DeleteAccountScreen() {
     try {
       const userId = session?.user.id;
       if (!userId) return;
-      // Deletes the account on the server, signs out and deletes the local database file. The
-      // session is gone, so the router moves to the email screen.
-      await deleteMyAccount(userId);
+      // Deletes the account on the server and signs out; the session is gone, so the cache is
+      // cleared and the router moves to the email screen.
+      await deleteAccount();
       await clearDraft(userId);
     } catch (deleteError) {
-      setError(copy.errors[classifySaveError(deleteError as Error)]);
+      setError(copy.errors[classifyRequestError(deleteError as Error)]);
       setDeleting(false);
     }
   };

@@ -1,57 +1,60 @@
-// The athlete's profile in the local database. The app reads it from here; changes are written
-// here and queued in the outbox for the server (sent from step 6b on).
-import { eq } from 'drizzle-orm';
-
-import type { OnboardingProfileUpdate } from '@/core/onboarding';
-import { hasWaitingChange, profiles, type LocalStore } from '@/lib/local-db';
-import { inTransaction, recordChange, timestamp } from '@/lib/local-db/write';
+// The athlete's profile and account. Postgres checks the onboarding answers are complete
+// (profiles_onboarding_complete) and that each user only changes their own row.
+import type { OnboardingChoices, OnboardingProfileUpdate } from '@/core/onboarding';
+import type { DataContext } from '@/lib/data/context';
+import { throwIfError, unwrap, unwrapMaybe } from '@/lib/data/result';
+import { supabase } from '@/lib/supabase/client';
 import type { Tables } from '@/lib/supabase/database.types';
 
-export type ProfileRow = typeof profiles.$inferSelect;
+export type ProfileRow = Tables<'profiles'>;
 
-export function getProfile(store: LocalStore): ProfileRow | null {
-  return store.db.select().from(profiles).where(eq(profiles.id, store.userId)).get() ?? null;
-}
-
-/**
- * Stores the profile read from the server (once per sign-in until step 6b brings full sync).
- * Skipped when the phone has changes to the profile not yet sent, so they are never overwritten
- * by an older server copy. Not queued in the outbox: it already is the server's state.
- */
-export function saveProfileFromServer(store: LocalStore, row: Tables<'profiles'>): boolean {
-  if (row.id !== store.userId) throw new Error('Profile of another user');
-  return inTransaction(store, (tx) => {
-    if (hasWaitingChange(tx, 'profiles', row.id)) return false;
-    tx.insert(profiles).values(row).onConflictDoUpdate({ target: profiles.id, set: row }).run();
-    return true;
-  });
+export async function getProfile(ctx: DataContext): Promise<ProfileRow | null> {
+  return unwrapMaybe(
+    await supabase.from('profiles').select('*').eq('id', ctx.userId).maybeSingle(),
+  );
 }
 
 export type ProfileChanges = Partial<Omit<ProfileRow, 'id' | 'created_at' | 'updated_at'>>;
 
-// Saves every onboarding answer and marks onboarding as done in one write. Postgres checks the
-// answers are complete (profiles_onboarding_complete) when the change reaches it.
-export function completeOnboarding(
-  store: LocalStore,
-  answers: OnboardingProfileUpdate,
-): ProfileRow {
-  return updateProfile(store, { ...answers, onboarded_at: timestamp(store) });
+// Edits the profile (onboarding answers, units, bodyweight...). Repeating it is harmless.
+export async function updateProfile(
+  ctx: DataContext,
+  changes: ProfileChanges,
+): Promise<ProfileRow> {
+  return unwrap(
+    await supabase.from('profiles').update(changes).eq('id', ctx.userId).select().single(),
+  );
 }
 
-// Edits the profile (onboarding answers, units, bodyweight...). The profile row comes from the
-// server at sign-in; without it there is nothing to edit yet.
-export function updateProfile(store: LocalStore, changes: ProfileChanges): ProfileRow {
-  return inTransaction(store, (tx) => {
-    const existing = tx
-      .select({ id: profiles.id })
-      .from(profiles)
-      .where(eq(profiles.id, store.userId))
-      .get();
-    if (!existing) throw new Error('Profile not loaded yet');
-    tx.update(profiles)
-      .set({ ...changes, updated_at: timestamp(store) })
-      .where(eq(profiles.id, store.userId))
-      .run();
-    return recordChange<ProfileRow>(tx, store, 'profiles', profiles, store.userId, 'upsert');
-  });
+// Saves every onboarding answer and marks onboarding as done in one update, so the profile is
+// never half filled.
+export function completeOnboarding(
+  ctx: DataContext,
+  answers: OnboardingProfileUpdate,
+): Promise<ProfileRow> {
+  return updateProfile(ctx, { ...answers, onboarded_at: ctx.now().toISOString() });
+}
+
+// Deletes the account and all its data (Postgres delete_my_account, which only ever deletes
+// auth.uid()), then forgets the session on this phone.
+export async function deleteAccount(): Promise<void> {
+  throwIfError(await supabase.rpc('delete_my_account'));
+  await supabase.auth.signOut({ scope: 'local' });
+}
+
+// The onboarding choices of a saved profile, or null before onboarding.
+export function profileChoices(profile: ProfileRow): OnboardingChoices | null {
+  if (profile.onboarded_at === null || profile.sports === null || profile.weekly_target === null) {
+    return null;
+  }
+  return {
+    displayName: profile.display_name ?? '',
+    sports: profile.sports,
+    gymFocus: profile.gym_focus,
+    swimStyle: profile.swim_style,
+    poolLength: profile.default_pool_length,
+    weeklyTarget: profile.weekly_target,
+    weightUnit: profile.weight_unit,
+    bodyweightKg: profile.bodyweight_kg,
+  };
 }

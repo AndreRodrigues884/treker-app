@@ -3,12 +3,12 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Screen } from '@/components';
+import { AppText, Button, ErrorNotice, Screen } from '@/components';
+import { classifyRequestError, type RequestErrorKey } from '@/core/errors';
 import {
   addedSteps,
   answersFromProfile,
   buildProfileUpdate,
-  classifySaveError,
   defaultAnswers,
   isEditableStep,
   validateStep,
@@ -17,7 +17,7 @@ import {
 } from '@/core/onboarding';
 import { useAuth } from '@/features/auth/auth-provider';
 import { Question } from '@/features/onboarding/questions';
-import { updateProfile } from '@/features/profile/repository';
+import { useUpdateProfile } from '@/features/profile/queries';
 import { getDeviceRegion, getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
@@ -31,7 +31,8 @@ type EditableStep = Exclude<StepId, 'summary'>;
 export default function EditAnswerScreen() {
   const { t, language } = useI18n();
   const params = useLocalSearchParams<{ step?: string }>();
-  const { profile, store } = useAuth();
+  const { profile } = useAuth();
+  const saveProfile = useUpdateProfile();
 
   const [step, setStep] = useState<EditableStep>(
     isEditableStep(params.step) ? params.step : 'name',
@@ -45,9 +46,10 @@ export default function EditAnswerScreen() {
   const [queue, setQueue] = useState<EditableStep[]>([]);
   const [error, setError] = useState<string>();
   const [followUp, setFollowUp] = useState(false);
-  const [saving, setSaving] = useState(false);
+  // A failed save (network or server). The answers stay as they are, ready to try again.
+  const [saveError, setSaveError] = useState<RequestErrorKey>();
 
-  if (!answers || !original || !store) return <Screen>{null}</Screen>;
+  if (!answers || !original) return <Screen>{null}</Screen>;
 
   const ask = (next: EditableStep, rest: EditableStep[]) => {
     setStep(next);
@@ -78,13 +80,11 @@ export default function EditAnswerScreen() {
     }
 
     setError(undefined);
-    setSaving(true);
+    setSaveError(undefined);
     try {
-      // Saved on the phone and queued for the server; screens follow the local profile.
-      updateProfile(store, result.value);
-    } catch (saveError) {
-      setError(t.onboarding.errors[classifySaveError(saveError as Error)]);
-      setSaving(false);
+      await saveProfile.mutateAsync(result.value);
+    } catch (failure) {
+      setSaveError(classifyRequestError(failure));
       return;
     }
     router.back();
@@ -116,7 +116,17 @@ export default function EditAnswerScreen() {
           error={error}
           onSubmit={save}
         />
-        <Button label={t.common.save} onPress={save} loading={saving} fullWidth />
+        {saveError !== undefined ? (
+          <ErrorNotice
+            message={t.common.errors[saveError]}
+            network={saveError === 'network'}
+            onRetry={save}
+            retryLabel={t.common.retry}
+            retrying={saveProfile.isPending}
+          />
+        ) : (
+          <Button label={t.common.save} onPress={save} loading={saveProfile.isPending} fullWidth />
+        )}
       </View>
     </Screen>
   );

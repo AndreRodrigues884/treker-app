@@ -6,6 +6,12 @@ export const en = {
     next: 'Next',
     save: 'Save',
     close: 'Close',
+    retry: 'Try again',
+    offline: 'No connection',
+    errors: {
+      network: 'No connection. Check your internet and try again.',
+      generic: 'Something went wrong. Try again.',
+    },
   },
   nav: {
     today: 'Today',
@@ -91,7 +97,7 @@ export const en = {
         title: 'Records you can trust',
         body: 'Short course and long course, never mixed.',
       },
-      offline: { title: 'Works offline. Your data stays yours.' },
+      privacy: { title: 'Private by default. Your data stays yours.' },
     },
     demo: {
       benchPress: 'Bench press',
@@ -100,7 +106,7 @@ export const en = {
       today: 'Today',
       shortCourse: 'Short course',
       longCourse: 'Long course',
-      savedOnPhone: 'Saved on your phone',
+      deleteAnytime: 'Delete your account anytime',
       privateByDefault: 'Private by default',
       exportAnytime: 'Export anytime (CSV)',
     },

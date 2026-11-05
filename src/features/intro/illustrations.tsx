@@ -2,10 +2,10 @@
 // They are decorative: the page title says the same, so screen readers skip them.
 import {
   ArrowUp,
-  CloudOff,
   Download,
   Dumbbell,
   Lock,
+  UserX,
   Waves,
   type LucideIcon,
 } from 'lucide-react-native';
@@ -153,14 +153,14 @@ function FeatureRow({ icon, label }: { icon: LucideIcon; label: string }) {
   );
 }
 
-export function OfflineIllustration() {
+export function PrivacyIllustration() {
   const { t } = useI18n();
   return (
     <Decorative>
       <Card>
-        <FeatureRow icon={CloudOff} label={t.intro.demo.savedOnPhone} />
-        <Divider />
         <FeatureRow icon={Lock} label={t.intro.demo.privateByDefault} />
+        <Divider />
+        <FeatureRow icon={UserX} label={t.intro.demo.deleteAnytime} />
         <Divider />
         <FeatureRow icon={Download} label={t.intro.demo.exportAnytime} />
       </Card>

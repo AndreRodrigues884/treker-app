@@ -595,6 +595,7 @@ export type Database = {
       };
     };
     Functions: {
+      delete_activity: { Args: { p_activity_id: string }; Returns: undefined };
       delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
     };
     Enums: {

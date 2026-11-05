@@ -9,7 +9,7 @@ O Treker recomeça em React Native (Expo) com **Gym e Natação** na v1; a Corri
 - **O que é:** uma app de tracking para atletas autónomos que se treinam a si próprios. Regista, mede e mostra evolução. Não prescreve treinos nem faz coaching.
 - **Diferencial frente ao Hevy e ao Strong:** design e estética cuidados, e o ginásio e a natação na mesma app, com um histórico único.
 - **Público inicial:** nadadores e atletas de outras modalidades que também fazem ginásio. Os primeiros testers vêm do clube de natação.
-- **Princípios:** registar em segundos, a meio do treino e sem rede; dados em que o atleta pode confiar; ver a evolução das modalidades juntas.
+- **Princípios:** registar em segundos, a meio do treino (sem rede só depois da v1: o offline foi adiado); dados em que o atleta pode confiar; ver a evolução das modalidades juntas.
 - **A base de dados é desenhada para várias modalidades desde o início**, para que a Corrida entre sem reescrever o perfil, o histórico ou a partilha.
 
 **Critério para avançar para a Corrida:** pelo menos 12 testers durante 14 dias (obrigatório na Play Store para contas novas) e, ao fim de 4 semanas, a maioria ainda regista treinos todas as semanas.
@@ -68,7 +68,7 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 
 | Funcionalidade | Área | Prioridade | Porquê |
 | --- | --- | --- | --- |
-| Offline-first: base local (SQLite) com sincronização e sem duplicados | Base | P0 | Ginásios em caves e piscinas têm rede fraca |
+| ~~Offline-first: base local (SQLite) com sincronização e sem duplicados~~ **Adiado (fora da v1)**: a v1 funciona só com rede | Base | — | Ginásios em caves e piscinas têm rede fraca; volta depois de validar a v1 (ver docs/data-access.md, "Voltar ao offline") |
 | Temporizador de descanso com notificação no ecrã bloqueado | Gym | P0 | Das funções mais usadas; mantém a app aberta durante o treino |
 | Séries de aquecimento fora das estatísticas | Gym | P0 | Sem isto, volume, 1RM e PRs ficam sujos |
 | Histórico em calendário com Gym e Natação juntos | Base | P0 | É a vista que mostra o diferencial multi-modalidade |
@@ -91,6 +91,8 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 **Nota:** As respostas do onboarding decidem o ecrã inicial (modalidades, foco do ginásio, estilo de natação, objetivo semanal) — aplicar quando o ecrã inicial for construído.
 
 ## Roadmap por prioridade
+
+**Nota para a Fase 1:** O treino em curso fica guardado num rascunho no telemóvel até ser gravado no servidor, para uma falha de rede no fim não perder as séries.
 
 As fases 0 a 3 são a v1 (todas as P0); a v1.1 e a fase 5 só arrancam depois de passarem os testes com utilizadores.
 

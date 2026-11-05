@@ -8,7 +8,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { AppText, Divider, ProgressBar } from '@/components';
 import { interpolate } from '@/core/i18n';
-import { useWorkoutsThisWeek } from '@/features/activities/use-workouts-this-week';
+import { useWorkoutsThisWeek } from '@/features/activities/queries';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useI18n } from '@/lib/i18n';
 import { colors, radii, spacing } from '@/theme';
@@ -18,7 +18,7 @@ import { colors, radii, spacing } from '@/theme';
 export function DrawerContent(props: DrawerContentComponentProps) {
   const { t } = useI18n();
   const { profile } = useAuth();
-  const done = useWorkoutsThisWeek() ?? 0;
+  const done = useWorkoutsThisWeek().data ?? 0;
   const target = profile?.weekly_target ?? null;
   const goal = target !== null ? interpolate(t.today.weeklyProgress, { done, target }) : null;
   const version = Constants.expoConfig?.version ?? '?';

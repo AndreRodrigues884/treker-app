@@ -1,7 +1,8 @@
 // Renders the real intro, auth, onboarding and app routes with the real providers and route
-// guards. The Supabase client must be mocked (see supabase-mock.ts); AsyncStorage is mocked in
-// jest.setup.ts.
+// guards. The Supabase client must be mocked (see supabase-mock.ts); AsyncStorage and NetInfo are
+// mocked in jest.setup.ts.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { renderRouter } from 'expo-router/testing-library';
 
 import DrawerLayout from '@/app/(app)/(drawer)/_layout';
@@ -10,7 +11,6 @@ import TodayScreen from '@/app/(app)/(drawer)/index';
 import ProfileScreen from '@/app/(app)/(drawer)/profile';
 import RecordsScreen from '@/app/(app)/(drawer)/records';
 import AppLayout from '@/app/(app)/_layout';
-import LocalDatabaseRoute from '@/app/(app)/dev/local-db';
 import DeleteAccountScreen from '@/app/(app)/settings/delete-account';
 import EditAnswerScreen from '@/app/(app)/settings/edit';
 import LanguageScreen from '@/app/(app)/settings/language';
@@ -24,26 +24,36 @@ import OnboardingScreen from '@/app/(onboarding)/onboarding';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { RootNavigator } from '@/features/auth/root-navigator';
 import { IntroProvider } from '@/features/intro/intro-state';
+import { OfflineBanner } from '@/features/network/offline-banner';
+import { createQueryClient } from '@/lib/data/query-client';
 import { LanguageProvider } from '@/lib/i18n';
 import { storageKeys } from '@/lib/storage';
 
-import { resetLocalDatabases } from './local-store';
+// A fresh cache for every render, without automatic retries so errors show straight away.
+let queryClient: QueryClient = createQueryClient({ retry: false });
+
+// The cache of the app rendered last, for assertions.
+export function currentQueryClient(): QueryClient {
+  return queryClient;
+}
 
 function RootLayout() {
   return (
-    <LanguageProvider>
-      <IntroProvider>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </IntroProvider>
-    </LanguageProvider>
+    <QueryClientProvider client={queryClient}>
+      <LanguageProvider>
+        <IntroProvider>
+          <AuthProvider>
+            <RootNavigator />
+            <OfflineBanner />
+          </AuthProvider>
+        </IntroProvider>
+      </LanguageProvider>
+    </QueryClientProvider>
   );
 }
 
-// Clears the phone storage and local databases; by default the intro counts as already seen.
+// Clears the phone storage; by default the intro counts as already seen.
 export async function resetStorage(options: { introSeen?: boolean } = {}) {
-  resetLocalDatabases();
   await AsyncStorage.clear();
   if (options.introSeen ?? true) {
     await AsyncStorage.setItem(storageKeys.introSeen, 'true');
@@ -51,6 +61,7 @@ export async function resetStorage(options: { introSeen?: boolean } = {}) {
 }
 
 export function renderApp(initialUrl = '/') {
+  queryClient = createQueryClient({ retry: false });
   return renderRouter(
     {
       _layout: RootLayout,
@@ -70,7 +81,6 @@ export function renderApp(initialUrl = '/') {
       '(app)/start': StartWorkoutScreen,
       '(app)/settings/edit': EditAnswerScreen,
       '(app)/settings/language': LanguageScreen,
-      '(app)/dev/local-db': LocalDatabaseRoute,
       '(app)/settings/delete-account': DeleteAccountScreen,
     },
     { initialUrl },

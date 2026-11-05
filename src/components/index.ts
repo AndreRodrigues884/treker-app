@@ -5,6 +5,7 @@ export { Card, type CardProps } from './card';
 export { Chip, type ChipProps, type ChipTone } from './chip';
 export { Divider } from './divider';
 export { EmptyState, type EmptyStateProps } from './empty-state';
+export { ErrorNotice, type ErrorNoticeProps } from './error-notice';
 export { Icon, type IconProps, type LucideIcon } from './icon';
 export { ListRow, type ListRowProps } from './list-row';
 export { OptionCard, type OptionCardProps, type OptionCardTone } from './option-card';

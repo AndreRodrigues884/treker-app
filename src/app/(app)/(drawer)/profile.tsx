@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { router, type Href } from 'expo-router';
-import { Database, LayoutGrid, Languages, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
+import { LayoutGrid, Languages, LogOut, Mail, Shield, Trash2 } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -157,11 +157,6 @@ export default function ProfileScreen() {
         {__DEV__ && (
           // Dev-only tools, so their labels are not translated.
           <Section title="Development">
-            <ListRow
-              label="Local database"
-              icon={Database}
-              onPress={() => router.push('/dev/local-db')}
-            />
             <ListRow
               label="Component catalog"
               icon={LayoutGrid}

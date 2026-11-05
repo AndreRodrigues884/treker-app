@@ -2,12 +2,12 @@ import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 
-import { AppText, Button, ProgressBar, Screen } from '@/components';
+import { AppText, Button, ErrorNotice, ProgressBar, Screen } from '@/components';
+import { classifyRequestError, type RequestErrorKey } from '@/core/errors';
 import { interpolate } from '@/core/i18n';
 import {
   buildProfileUpdate,
   choicesFromUpdate,
-  classifySaveError,
   defaultAnswers,
   nextStep,
   previousStep,
@@ -21,7 +21,7 @@ import { useAuth } from '@/features/auth/auth-provider';
 import { ChoicesSummary } from '@/features/onboarding/choices-summary';
 import { clearDraft, loadDraft, saveDraft } from '@/features/onboarding/draft';
 import { Question } from '@/features/onboarding/questions';
-import { completeOnboarding } from '@/features/profile/repository';
+import { useCompleteOnboarding } from '@/features/profile/queries';
 import { getDeviceRegion, getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
@@ -31,12 +31,14 @@ import { spacing } from '@/theme';
 // is saved on the phone so the questionnaire continues where it stopped.
 export default function OnboardingScreen() {
   const { t, language } = useI18n();
-  const { store } = useAuth();
-  const userId = store?.userId ?? null;
+  const { data } = useAuth();
+  const userId = data?.userId ?? null;
+  const saveAnswers = useCompleteOnboarding();
 
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
   const [error, setError] = useState<string>();
-  const [saving, setSaving] = useState(false);
+  // A failed final save. The draft stays on the phone, so nothing is lost.
+  const [saveError, setSaveError] = useState<RequestErrorKey>();
 
   useEffect(() => {
     if (!userId) return;
@@ -69,7 +71,7 @@ export default function OnboardingScreen() {
     return () => subscription.remove();
   });
 
-  if (!draft || !userId || !store) {
+  if (!draft || !userId) {
     return <Screen>{null}</Screen>;
   }
 
@@ -104,17 +106,14 @@ export default function OnboardingScreen() {
     }
 
     setError(undefined);
-    setSaving(true);
+    setSaveError(undefined);
     try {
-      // Saved on the phone (and queued for the server), so it works offline.
-      completeOnboarding(store, result.value);
-    } catch (saveError) {
-      // The draft stays on the phone, so nothing is lost and the user can try again.
-      setError(t.onboarding.errors[classifySaveError(saveError as Error)]);
-      setSaving(false);
+      // The cached profile now has onboarded_at, so the router moves on to the app.
+      await saveAnswers.mutateAsync(result.value);
+    } catch (failure) {
+      setSaveError(classifyRequestError(failure));
       return;
     }
-    // The local profile now has onboarded_at, so the router moves on to the app.
     await clearDraft(userId);
   };
 
@@ -153,12 +152,22 @@ export default function OnboardingScreen() {
                 {error}
               </AppText>
             )}
-            <Button
-              label={t.onboarding.summary.enter}
-              onPress={finish}
-              loading={saving}
-              fullWidth
-            />
+            {saveError !== undefined ? (
+              <ErrorNotice
+                message={t.onboarding.errors[saveError]}
+                network={saveError === 'network'}
+                onRetry={finish}
+                retryLabel={t.common.retry}
+                retrying={saveAnswers.isPending}
+              />
+            ) : (
+              <Button
+                label={t.onboarding.summary.enter}
+                onPress={finish}
+                loading={saveAnswers.isPending}
+                fullWidth
+              />
+            )}
           </View>
         ) : (
           <>

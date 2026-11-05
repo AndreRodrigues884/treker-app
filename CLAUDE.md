@@ -11,7 +11,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 - **Business logic lives in `src/core`, with tests.** Calculations, validation and PR rules are pure TypeScript (no React or React Native). Screens only display data and call that logic.
 - **Data and security rules live in Postgres** (RLS, functions), not only in the app. Everything the app checks must also be enforced in the database.
 - **Workout dates are stored as the athlete's local date**, never derived from UTC.
-- **Os ecrãs leem e escrevem só através dos repositórios locais; nunca chamam o Supabase diretamente para dados de treino.** Screens use `src/features/*/repository.ts` (SQLite on the phone, with the outbox) and `useLocalQuery` for reactive reads. Only account operations (sign-in, the profile download at sign-in, deleting the account) call Supabase. See [docs/offline.md](docs/offline.md).
+- **Os ecrãs leem e escrevem só através dos repositórios; os repositórios são o único sítio que chama o Supabase para dados do atleta.** Screens use the TanStack Query hooks (`src/features/*/queries.ts`), which call `src/features/*/repository.ts`. Creates take an id made on the phone and upsert by it, so a retry never duplicates. Only sign-in calls Supabase outside the repositories. See [docs/data-access.md](docs/data-access.md).
 - **Records and stats are derived data** (`personal_records`, `exercise_stats`): only the Postgres rebuild triggers write them; the app never does. The 1RM formula exists in both `src/core/records` and Postgres; change both together and keep `supabase/tests/fixtures/one-rep-max-cases.json` as the single source of test cases.
 - **No secrets in the app code.** Only the public Supabase publishable key (`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), via `EXPO_PUBLIC_` environment variables.
 - **Code and comments in English.** UI strings live in the `en` and `pt` dictionaries in `src/core/i18n` and are read with `useI18n()` from `src/lib/i18n`; never hard-code user-facing text. Dev-only screens are the exception.
@@ -40,7 +40,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 - `src/components/` — reusable UI components
 - `src/features/` — code per area: `gym`, `swim`, `calendar`, `records`, `profile`
 - `src/core/` — pure TypeScript logic (types, Zod schemas, calculations such as 1RM and PRs); no React/React Native imports
-- `src/lib/` — clients and services (Supabase, storage, the local SQLite database in `src/lib/local-db`)
+- `src/lib/` — clients and services (Supabase, storage, `src/lib/data`: TanStack Query client, cache keys, data context)
 - `src/theme/` — design tokens: colors, fonts, typography, spacing, radii, sizes
 - `supabase/` — migrations and SQL tests
 - `docs/` — documentation
@@ -60,8 +60,6 @@ npm run db:types    # regenerate src/lib/supabase/database.types.ts
 ```
 
 Sign-in, session, route protection, profile settings and account deletion: see [docs/auth.md](docs/auth.md). External links (privacy policy, contact) live only in `src/lib/links.ts`. Screen tests mock the Supabase client with `test-utils/supabase-mock.ts` and render the real routes with `test-utils/render-app.tsx`.
-
-Local database changes (SQLite on the phone): change `src/lib/local-db/schema.ts` and add a new numbered migration in `src/lib/local-db/migrations.ts` (never edit a shipped one); `schema-types.ts` makes `npm run typecheck` fail if the local rows stop matching the server's. Jest runs the real local database on Node's SQLite (`test-utils/expo-sqlite-mock.ts`).
 
 Database changes: read [docs/database.md](docs/database.md) first and follow its "Ao acrescentar uma tabela" checklist. After changing migrations, run `db:reset`, `db:test` and `db:types`.
 

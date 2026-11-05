@@ -334,13 +334,3 @@ export function choicesFromUpdate(update: OnboardingProfileUpdate): OnboardingCh
     bodyweightKg: update.bodyweight_kg,
   };
 }
-
-export type SaveErrorKey = 'network' | 'generic';
-
-// Saving fails without a connection as a fetch TypeError ("Network request failed").
-export function classifySaveError(error: { name?: string; message?: string }): SaveErrorKey {
-  const text = `${error.name ?? ''} ${error.message ?? ''}`;
-  return /network request failed|failed to fetch|fetcherror|typeerror/i.test(text)
-    ? 'network'
-    : 'generic';
-}
