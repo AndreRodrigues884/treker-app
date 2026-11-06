@@ -1,4 +1,4 @@
-import { fromKilograms, parseDecimal, toKilograms } from './index';
+import { fromKilograms, fromMetres, parseDecimal, toKilograms } from './index';
 
 describe('parseDecimal', () => {
   it.each([
@@ -26,5 +26,12 @@ describe('fromKilograms', () => {
   it('converts back for display, rounded to 0.1', () => {
     expect(fromKilograms(72.57, 'lb')).toBe(160);
     expect(fromKilograms(72.5, 'kg')).toBe(72.5);
+  });
+});
+
+describe('fromMetres', () => {
+  it('shows metres in the pool unit, rounded', () => {
+    expect(fromMetres(141.44, 'm')).toBe(141);
+    expect(fromMetres(91.44, 'yd')).toBe(100);
   });
 });

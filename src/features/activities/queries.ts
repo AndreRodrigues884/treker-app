@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { nextCursor, type ActivityCursor } from '@/core/activities';
 import { localDateOf, weekRange } from '@/core/dates';
 import { useDataContext } from '@/features/auth/auth-provider';
 import type { DataContext } from '@/lib/data/context';
@@ -10,7 +11,8 @@ import {
   countActivities,
   getActivityWithEntries,
   listActivities,
-  listRecentActivities,
+  listActivityRecords,
+  listActivitySummaries,
   type DateRange,
 } from './repository';
 
@@ -37,12 +39,30 @@ export function useActivities(range: DateRange) {
   });
 }
 
-// The latest workouts, newest first (the profile's list). Refreshed by every training write.
-export function useRecentActivities(limit = 10) {
+export const SUMMARY_PAGE_SIZE = 10;
+
+/**
+ * The athlete's workouts with their totals, newest first, one page at a time (the profile's
+ * list): `fetchNextPage` loads the next page by cursor; `hasNextPage` is false after the last.
+ * Every training write (useTrainingMutation) refreshes it, saving a session included.
+ */
+export function useActivitySummaries() {
+  const ctx = useDataContext();
+  return useInfiniteQuery({
+    queryKey: queryKeys.activitySummaries(ctx.userId),
+    queryFn: ({ pageParam }) =>
+      listActivitySummaries(ctx, { before: pageParam, limit: SUMMARY_PAGE_SIZE }),
+    initialPageParam: undefined as ActivityCursor | undefined,
+    getNextPageParam: (lastPage) => nextCursor(lastPage, SUMMARY_PAGE_SIZE),
+  });
+}
+
+// The records a workout set, for the workout screen.
+export function useActivityRecords(activityId: string) {
   const ctx = useDataContext();
   return useQuery({
-    queryKey: queryKeys.activityRecent(ctx.userId, limit),
-    queryFn: () => listRecentActivities(ctx, limit),
+    queryKey: queryKeys.activityRecords(ctx.userId, activityId),
+    queryFn: () => listActivityRecords(ctx, activityId),
   });
 }
 

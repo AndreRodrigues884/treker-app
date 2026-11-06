@@ -598,6 +598,21 @@ export type Database = {
       delete_activity: { Args: { p_activity_id: string }; Returns: undefined };
       delete_custom_exercise: { Args: { p_exercise_id: string }; Returns: undefined };
       delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
+      list_activity_summaries: {
+        Args: { p_before_date?: string; p_before_id?: string; p_limit?: number };
+        Returns: {
+          distance_m: number;
+          duration_s: number;
+          ended_at: string;
+          id: string;
+          local_date: string;
+          set_count: number;
+          started_at: string;
+          title: string;
+          type: Database['public']['Enums']['activity_type'];
+          volume_kg: number;
+        }[];
+      };
       save_workout_template: { Args: { p_template: Json }; Returns: undefined };
     };
     Enums: {

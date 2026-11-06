@@ -25,7 +25,7 @@ Fora dos repositórios, só o login (`src/features/auth/api.ts`) fala com o Supa
 
 | Repositório | Operações |
 | --- | --- |
-| `activities` | Começar, terminar, editar e apagar uma atividade; ler uma atividade com as séries e os tempos; listar e contar atividades por intervalo de datas |
+| `activities` | Começar, terminar, editar e apagar uma atividade; ler uma atividade com as séries e os tempos e os seus recordes; listar e contar atividades por intervalo de datas; listar os treinos com os totais, por páginas (`list_activity_summaries`) |
 | `gym` | Acrescentar, editar, apagar e listar séries |
 | `swim` | Acrescentar, editar e apagar tempos de natação |
 | `exercises` | Listar a biblioteca e os exercícios próprios; criar, editar, eliminar e procurar exercícios próprios |
@@ -36,6 +36,7 @@ Recebem um `DataContext` (`src/lib/data/context.ts`): o id do atleta, o relógio
 
 Regras:
 
+- **Listas longas carregam por páginas, com cursor.** O histórico de treinos no Perfil usa `useActivitySummaries` (`useInfiniteQuery`), 10 treinos de cada vez, com o cursor `(local_date, id)` da última linha (`nextCursor` em `src/core/activities`). Nunca se usa offset nem se carrega o histórico todo. Qualquer gravação de treino (`useTrainingMutation`) invalida `['user', id, 'activities']` e, por isso, também estas páginas; gravar uma sessão vai fazer o mesmo.
 - **Os ids são gerados no telemóvel**, e criar faz `upsert` por id. Repetir um pedido depois de uma falha de rede nunca duplica uma linha, desde que se use o mesmo id. As funções de criação aceitam um `id` opcional para isso; os hooks geram-no **antes** do pedido e "Tentar outra vez" repete-o com o mesmo.
 - **Gravar um treino guardado é um só pedido**, à função Postgres `save_workout_template` ([database.md](database.md#gravar-um-treino-guardado)): o treino e a lista inteira numa transação, com os ids do telemóvel.
 - **Eliminar um exercício próprio é um só pedido**, à função Postgres `delete_custom_exercise` ([database.md](database.md#eliminar-um-exercício-próprio)): sai da biblioteca e dos treinos guardados; os treinos feitos e os recordes mantêm-se. A lista de exercícios inclui os eliminados, para os treinos já registados continuarem a mostrar o nome; a biblioteca esconde-os.
@@ -57,6 +58,8 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 | `['user', id, 'activities', 'count', início, fim]` | Treinos desta semana ("Hoje" e menu) |
 | `['user', id, 'activities', 'list', início, fim]` | Listas por datas (calendário) |
 | `['user', id, 'activities', 'detail', atividade]` | Uma atividade com as séries e os tempos |
+| `['user', id, 'activities', 'detail', atividade, 'records']` | Os recordes desse treino (ecrã de detalhe) |
+| `['user', id, 'activities', 'summaries']` | Os treinos do Perfil com os totais, por páginas (`useInfiniteQuery`) |
 | `['user', id, 'exercises']` | A biblioteca e os exercícios próprios (frescos 5 min) |
 | `['user', id, 'templates', 'list']` | Os treinos guardados com os seus exercícios |
 | `['user', id, 'templates', 'detail', treino]` | Um treino guardado, no editor |
@@ -106,6 +109,12 @@ Antes disso, a Fase 1 guarda o **treino em curso num rascunho no telemóvel** at
 
 - `__tests__/data/repositories-test.ts`: os repositórios contra o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts), uma base em memória). Inclui: repetir uma criação com o mesmo id não duplica; apagar marca `deleted_at` (também em cascata); contagens e listas por datas; erros de rede.
 - `__tests__/app/today-test.tsx`: a contagem semanal do "Hoje", o erro com "Tentar outra vez", e uma gravação de treino a atualizar a contagem.
+- `__tests__/app/workout-history-test.tsx`:
+  - os treinos no Perfil com o título, a data, a duração, as séries e o volume (ou a distância);
+  - as páginas por cursor ("Mostrar mais");
+  - a lista a atualizar-se depois de uma gravação de treino;
+  - o ecrã de detalhe com os exercícios, as séries, o aquecimento e os recordes;
+  - um treino que já não existe.
 - `__tests__/app/workouts-test.tsx`:
   - pesquisa sem acentos e filtros;
   - escolha múltipla;

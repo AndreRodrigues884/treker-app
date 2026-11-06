@@ -237,6 +237,8 @@ export const supabaseMock = {
   // template and replaces its list like the Postgres function (see saveWorkoutTemplate).
   // rpc('delete_custom_exercise') marks the user's exercise and its template rows deleted (a
   // no-op when already deleted; P0002 for library or other users' exercises).
+  // rpc('list_activity_summaries') pages the user's workouts with their totals, like the Postgres
+  // function (see listActivitySummaries below).
   // rpc('delete_my_account') removes the user's rows, like the cascade in Postgres.
   rpc: jest.fn(async (fn: string, args: Row = {}) => {
     if (state.failure) return { data: null, error: state.failure };
@@ -269,6 +271,9 @@ export const supabaseMock = {
       }
       exercise.deleted_at = SERVER_NOW;
       return { data: null, ...ok };
+    }
+    if (fn === 'list_activity_summaries') {
+      return { data: listActivitySummaries(args), error: null };
     }
     if (fn === 'save_workout_template') {
       return { data: null, error: saveWorkoutTemplate(args.p_template as TemplatePayload) };
@@ -303,6 +308,63 @@ export const supabaseMock = {
   },
   from: jest.fn((table: string) => new Query(table)),
 };
+
+// Like Postgres list_activity_summaries: newest first by (local_date, id), strictly before the
+// cursor, at most 50 a page; work sets and volume (assistance as zero) or swim times and metres.
+function listActivitySummaries(args: Row): Row[] {
+  const limit = Math.min(Math.max(Number(args.p_limit ?? 20), 1), 50);
+  const before =
+    args.p_before_date === undefined
+      ? null
+      : { date: args.p_before_date as string, id: args.p_before_id as string };
+  const key = (row: Row) => `${row.local_date as string}|${row.id as string}`;
+  return rowsOf('activities')
+    .filter((activity) => activity.user_id === TEST_USER_ID && !activity.deleted_at)
+    .filter((activity) => !before || key(activity) < `${before.date}|${before.id}`)
+    .sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0))
+    .slice(0, limit)
+    .map((activity) => {
+      const sets = rowsOf('gym_sets').filter(
+        (set) => set.activity_id === activity.id && !set.deleted_at && !set.is_warmup,
+      );
+      const entries = rowsOf('swim_entries').filter(
+        (entry) => entry.activity_id === activity.id && !entry.deleted_at,
+      );
+      const gym = activity.type === 'gym';
+      const started = activity.started_at as string | null | undefined;
+      const ended = activity.ended_at as string | null | undefined;
+      return {
+        id: activity.id,
+        type: activity.type,
+        title: activity.title ?? null,
+        local_date: activity.local_date,
+        started_at: started ?? null,
+        ended_at: ended ?? null,
+        duration_s:
+          started && ended ? Math.floor((Date.parse(ended) - Date.parse(started)) / 1000) : null,
+        set_count: gym ? sets.length : entries.length,
+        volume_kg: gym
+          ? sets.reduce(
+              (total, set) =>
+                total +
+                Math.max((set.weight_kg as number | null) ?? 0, 0) *
+                  ((set.reps as number | null) ?? 0),
+              0,
+            )
+          : null,
+        distance_m: gym
+          ? null
+          : entries.reduce(
+              (total, entry) =>
+                total +
+                (entry.pool_length === '25yd'
+                  ? (entry.distance as number) * 0.9144
+                  : (entry.distance as number)),
+              0,
+            ),
+      };
+    });
+}
 
 type TemplatePayload = {
   id: string;

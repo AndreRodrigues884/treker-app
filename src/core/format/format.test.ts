@@ -1,4 +1,11 @@
-import { formatDistance, formatLocalDate, formatSwimTime, formatWeight, initialsOf } from './index';
+import {
+  formatDistance,
+  formatDuration,
+  formatLocalDate,
+  formatSwimTime,
+  formatWeight,
+  initialsOf,
+} from './index';
 
 const NBSP = ' ';
 
@@ -71,5 +78,16 @@ describe('initialsOf', () => {
     [null, ''],
   ])('%p -> %p', (name, initials) => {
     expect(initialsOf(name)).toBe(initials);
+  });
+});
+
+describe('formatDuration', () => {
+  it.each([
+    [20, '1 min'],
+    [45 * 60, '45 min'],
+    [3600, '1 h'],
+    [4500, '1 h 15 min'],
+  ])('%i s -> %s', (seconds, text) => {
+    expect(formatDuration(seconds).replace(/ /g, ' ')).toBe(text);
   });
 });

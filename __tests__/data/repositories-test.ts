@@ -6,6 +6,8 @@ import {
   finishActivity,
   getActivityWithEntries,
   listActivities,
+  listActivityRecords,
+  listActivitySummaries,
   startActivity,
 } from '@/features/activities/repository';
 import {
@@ -150,6 +152,50 @@ describe('activities', () => {
       deleted_at: null,
     });
     expect(await countActivities(ctx, { start: '2026-11-02', end: '2026-11-08' })).toBe(0);
+  });
+});
+
+describe('workout summaries and records', () => {
+  it('pages by cursor through Postgres list_activity_summaries, with nulls kept', async () => {
+    await startActivity(ctx, { type: 'gym', timezone: 'UTC', localDate: '2026-11-03' });
+    const swim = await startActivity(ctx, {
+      type: 'swim',
+      timezone: 'UTC',
+      localDate: '2026-11-04',
+    });
+
+    const first = await listActivitySummaries(ctx, { limit: 1 });
+    expect(supabaseMock.rpc).toHaveBeenLastCalledWith('list_activity_summaries', { p_limit: 1 });
+    expect(first).toEqual([
+      expect.objectContaining({
+        id: swim.id,
+        type: 'swim',
+        localDate: '2026-11-04',
+        durationS: null,
+        setCount: 0,
+        volumeKg: null,
+        distanceM: 0,
+      }),
+    ]);
+
+    const second = await listActivitySummaries(ctx, {
+      limit: 1,
+      before: { localDate: '2026-11-04', id: swim.id },
+    });
+    expect(supabaseMock.rpc).toHaveBeenLastCalledWith('list_activity_summaries', {
+      p_limit: 1,
+      p_before_date: '2026-11-04',
+      p_before_id: swim.id,
+    });
+    expect(second.map((row) => [row.localDate, row.volumeKg])).toEqual([['2026-11-03', 0]]);
+  });
+
+  it("reads a workout's records", async () => {
+    serverRows('personal_records').push(
+      { id: 'r1', user_id: TEST_USER_ID, activity_id: 'a1', type: 'gym', value: 100 },
+      { id: 'r2', user_id: TEST_USER_ID, activity_id: 'a2', type: 'gym', value: 90 },
+    );
+    expect((await listActivityRecords(ctx, 'a1')).map((r) => r.id)).toEqual(['r1']);
   });
 });
 

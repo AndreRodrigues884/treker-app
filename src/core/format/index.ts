@@ -80,3 +80,13 @@ export function initialsOf(name: string | null | undefined): string {
   const last = words.length > 1 ? (words[words.length - 1] ?? '') : '';
   return (Array.from(first)[0] ?? '').concat(Array.from(last)[0] ?? '').toLocaleUpperCase();
 }
+
+// A workout's length, rounded to the minute: "45 min", "1 h", "1 h 15 min" (the same in English
+// and Portuguese). At least "1 min".
+export function formatDuration(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / SECONDS_PER_MINUTE));
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}${NBSP}min`;
+  return rest === 0 ? `${hours}${NBSP}h` : `${hours}${NBSP}h ${rest}${NBSP}min`;
+}

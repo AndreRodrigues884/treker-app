@@ -43,7 +43,7 @@ describe('delete account', () => {
     await fireEvent.press(deleteButton());
 
     expect(deleteButton()).toBeDisabled();
-    expect(supabaseMock.rpc).not.toHaveBeenCalled();
+    expect(supabaseMock.rpc).not.toHaveBeenCalledWith('delete_my_account');
   });
 
   it('deletes the account once confirmed, then shows the email screen', async () => {
@@ -53,8 +53,10 @@ describe('delete account', () => {
     expect(deleteButton()).toBeEnabled();
     await fireEvent.press(deleteButton());
 
-    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('delete_my_account');
+    // Once (the profile's workout list calls another function).
+    expect(supabaseMock.rpc.mock.calls.filter(([fn]) => fn === 'delete_my_account')).toHaveLength(
+      1,
+    );
     expect(supabaseMock.auth.signOut).toHaveBeenCalled();
     expect(screen).toHavePathname('/sign-in');
   });

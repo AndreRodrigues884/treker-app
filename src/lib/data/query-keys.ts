@@ -11,10 +11,11 @@ export const queryKeys = {
     ['user', userId, 'activities', 'list', range.start, range.end] as const,
   activityCount: (userId: string, range: DateRangeKey) =>
     ['user', userId, 'activities', 'count', range.start, range.end] as const,
-  activityRecent: (userId: string, limit: number) =>
-    ['user', userId, 'activities', 'recent', limit] as const,
+  activitySummaries: (userId: string) => ['user', userId, 'activities', 'summaries'] as const,
   activity: (userId: string, activityId: string) =>
     ['user', userId, 'activities', 'detail', activityId] as const,
+  activityRecords: (userId: string, activityId: string) =>
+    ['user', userId, 'activities', 'detail', activityId, 'records'] as const,
   exercises: (userId: string) => ['user', userId, 'exercises'] as const,
   templates: (userId: string) => ['user', userId, 'templates'] as const,
   templateList: (userId: string) => ['user', userId, 'templates', 'list'] as const,

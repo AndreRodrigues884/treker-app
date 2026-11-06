@@ -1,6 +1,7 @@
 // Activities (one row per workout, gym or swim). Repositories are the only place that calls
 // Supabase for the athlete's data; screens use them through the query hooks (queries.ts).
 // Creating upserts by an id made on the phone, so repeating a request never duplicates a row.
+import type { ActivityCursor, ActivitySummary } from '@/core/activities';
 import { localDateOf, type LocalDate } from '@/core/dates';
 import type { DataContext } from '@/lib/data/context';
 import { throwIfError, unwrap, unwrapMaybe } from '@/lib/data/result';
@@ -10,6 +11,7 @@ import type { Tables } from '@/lib/supabase/database.types';
 export type ActivityRow = Tables<'activities'>;
 export type GymSetRow = Tables<'gym_sets'>;
 export type SwimEntryRow = Tables<'swim_entries'>;
+export type PersonalRecordRow = Tables<'personal_records'>;
 export type ActivityType = ActivityRow['type'];
 
 export type ActivityWithEntries = {
@@ -139,17 +141,50 @@ export async function listActivities(ctx: DataContext, range: DateRange): Promis
   );
 }
 
-// The athlete's latest workouts (not deleted), newest first, for the profile.
-export async function listRecentActivities(ctx: DataContext, limit = 10): Promise<ActivityRow[]> {
+/**
+ * One page of the athlete's workouts (not deleted), newest first, each with its duration, sets
+ * and volume (or distance), computed by Postgres list_activity_summaries. Pages by cursor: pass the
+ * cursor of the previous page (nextCursor in src/core/activities) to get the next one; never by
+ * offset, so rows added meanwhile never repeat or skip one.
+ */
+export async function listActivitySummaries(
+  _ctx: DataContext,
+  options: { before?: ActivityCursor; limit: number },
+): Promise<ActivitySummary[]> {
+  const rows = unwrap(
+    await supabase.rpc('list_activity_summaries', {
+      p_limit: options.limit,
+      ...(options.before
+        ? { p_before_date: options.before.localDate, p_before_id: options.before.id }
+        : {}),
+    }),
+  );
+  // The generated types mark every column as required; duration, volume and distance can be null.
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title as string | null,
+    localDate: row.local_date,
+    startedAt: row.started_at as string | null,
+    endedAt: row.ended_at as string | null,
+    durationS: row.duration_s as number | null,
+    setCount: row.set_count,
+    volumeKg: row.volume_kg === null ? null : Number(row.volume_kg),
+    distanceM: row.distance_m === null ? null : Number(row.distance_m),
+  }));
+}
+
+// The personal records a workout set (one per set or time that beat the previous best).
+export async function listActivityRecords(
+  ctx: DataContext,
+  activityId: string,
+): Promise<PersonalRecordRow[]> {
   return unwrap(
     await supabase
-      .from('activities')
+      .from('personal_records')
       .select('*')
-      .eq('user_id', ctx.userId)
-      .is('deleted_at', null)
-      .order('local_date', { ascending: false })
-      .order('started_at', { ascending: false })
-      .limit(limit),
+      .eq('activity_id', activityId)
+      .eq('user_id', ctx.userId),
   );
 }
 

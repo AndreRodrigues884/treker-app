@@ -181,6 +181,33 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
+### Listar treinos com os totais
+
+`public.list_activity_summaries(p_before_date date, p_before_id uuid, p_limit int)` devolve uma página dos treinos do atleta (os do Perfil), os mais recentes primeiro, já com os totais de cada um. Os totais são calculados no Postgres, por isso a app nunca carrega as séries todas para os somar.
+
+- **Paginação por cursor, nunca por offset.** A primeira página vai sem cursor. A seguinte passa o `(local_date, id)` da última linha recebida e recebe as linhas estritamente antes dela, pela ordem `local_date desc, id desc`.
+  - Essa ordem é servida pelo índice `activities (user_id, local_date desc, id desc)`.
+  - Treinos acrescentados ou apagados entretanto nunca fazem uma página repetir ou saltar linhas.
+  - Num mesmo dia, a ordem é pelo `id`.
+- **No máximo 50 linhas por página**, bem abaixo do `max_rows` da API (a app pede 10).
+- **Totais de cada treino:**
+
+| Coluna | Ginásio | Natação |
+| --- | --- | --- |
+| `duration_s` | `ended_at − started_at` em segundos; vazio sem início e fim | igual |
+| `set_count` | Séries de trabalho (sem aquecimentos) | Tempos registados |
+| `volume_kg` | Soma de peso × reps das séries de trabalho; assistência (peso negativo) conta como zero | vazio |
+| `distance_m` | vazio | Distância total em metros (piscinas em jardas convertidas, 1 jd = 0,9144 m) |
+
+- Treinos, séries e tempos apagados ficam de fora. As regras são as mesmas das `exercise_stats` e de `src/core/activities`, que calcula os totais do ecrã de detalhe; os dois lados são testados com o mesmo exemplo.
+- É `security invoker` (corre com o RLS do atleta), `stable`, com `search_path` vazio, e só `authenticated` a pode executar. Um cursor com só a data ou só o id dá erro (`22023`).
+- Testes em `supabase/tests/17_activity_summaries.sql`:
+  - os totais de ginásio e de natação;
+  - os treinos apagados e os de outros utilizadores ficam de fora;
+  - as páginas não repetem nem saltam linhas, mesmo com treinos novos entretanto;
+  - o limite de 50 linhas e o cursor incompleto;
+  - o anónimo não pode chamar a função.
+
 ### Gravar um treino guardado
 
 `public.save_workout_template(p_template jsonb)`, chamada pela app por `rpc` num só pedido:
@@ -298,7 +325,8 @@ Por isso, corrigir um tempo impossível (por exemplo 15,00 nos 50 m) faz reapare
 
 | Para quê | Índice |
 | --- | --- |
-| Calendário e histórico, paginados por cursor | `activities (user_id, local_date desc, id desc)` |
+| Calendário e histórico, paginados por cursor (`list_activity_summaries`) | `activities (user_id, local_date desc, id desc)` |
+| Recordes de um treino | `personal_records (activity_id)` |
 | Séries de uma sessão | `gym_sets (activity_id)` |
 | Histórico de um exercício | `gym_sets (user_id, exercise_id)` |
 | Melhores tempos por prova | `swim_entries (user_id, stroke, distance, pool_length)` |

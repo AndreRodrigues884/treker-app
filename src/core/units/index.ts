@@ -21,3 +21,12 @@ export function fromKilograms(kg: number, unit: WeightUnit): number {
   const value = unit === 'kg' ? kg : kg / KG_PER_LB;
   return Math.round(value * 10) / 10;
 }
+
+export type DistanceUnit = 'm' | 'yd';
+
+export const METRES_PER_YARD = 0.9144;
+
+// Metres shown in the athlete's pool unit, rounded to a whole number.
+export function fromMetres(metres: number, unit: DistanceUnit): number {
+  return Math.round(unit === 'm' ? metres : metres / METRES_PER_YARD);
+}

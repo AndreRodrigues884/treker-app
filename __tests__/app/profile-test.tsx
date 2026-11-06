@@ -91,10 +91,11 @@ describe('profile', () => {
     await resetStorage();
     await renderApp('/profile');
 
-    const swim = await screen.findByLabelText(/^Swimming, Swimming, /);
-    const push = screen.getByLabelText(/^Push A, Gym, /);
-    const rows = screen.getAllByLabelText(/^(Swimming|Push A), /);
-    expect(rows).toEqual([swim, push]);
+    const swim = await screen.findByRole('button', { name: /^Open Swimming, / });
+    const push = screen.getByRole('button', { name: /^Open Push A, / });
+    const rows = screen.getAllByRole('button', { name: /^Open [^,]+, / });
+    expect(rows).toHaveLength(2);
+    expect(rows.indexOf(swim)).toBeLessThan(rows.indexOf(push));
     expect(screen.queryByText(en.profile.recentEmptyTitle)).not.toBeOnTheScreen();
   });
 
