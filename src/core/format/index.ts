@@ -90,3 +90,22 @@ export function formatDuration(seconds: number): string {
   if (hours === 0) return `${rest}${NBSP}min`;
   return rest === 0 ? `${hours}${NBSP}h` : `${hours}${NBSP}h ${rest}${NBSP}min`;
 }
+
+// A running clock: "0:05", "12:30", "1:02:03". For the workout's elapsed time and the rest timer.
+export function formatClock(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const rest = String(seconds % SECONDS_PER_MINUTE).padStart(2, '0');
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
+}
+
+// A number as the athlete would type it in a field: "97.5" (en) / "97,5" (pt), no thousands
+// separator, up to 3 decimals. Empty for null.
+export function formatInputNumber(value: number | null, language: Language): string {
+  if (value === null) return '';
+  return new Intl.NumberFormat(intlLocale(language), {
+    maximumFractionDigits: 3,
+    useGrouping: false,
+  }).format(value);
+}

@@ -1,4 +1,4 @@
-import { fromKilograms, fromMetres, parseDecimal, toKilograms } from './index';
+import { fromKilograms, fromMetres, parseDecimal, parseSignedDecimal, toKilograms } from './index';
 
 describe('parseDecimal', () => {
   it.each([
@@ -33,5 +33,14 @@ describe('fromMetres', () => {
   it('shows metres in the pool unit, rounded', () => {
     expect(fromMetres(141.44, 'm')).toBe(141);
     expect(fromMetres(91.44, 'yd')).toBe(100);
+  });
+});
+
+describe('parseSignedDecimal', () => {
+  it('reads assistance as a negative weight', () => {
+    expect(parseSignedDecimal('-20')).toBe(-20);
+    expect(parseSignedDecimal(' 97,5 ')).toBe(97.5);
+    expect(parseSignedDecimal('-')).toBeNull();
+    expect(parseSignedDecimal('abc')).toBeNull();
   });
 });

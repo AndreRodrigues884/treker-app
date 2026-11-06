@@ -6,6 +6,7 @@ import { fireEvent, screen, waitFor, within } from 'expo-router/testing-library'
 
 import { en } from '@/core/i18n/en';
 import { pt } from '@/core/i18n/pt';
+import { resetSessionStore } from '@/features/session/session-store';
 import { resetDraftStore } from '@/features/templates/draft-store';
 import { storageKeys } from '@/lib/storage';
 import { colors } from '@/theme';
@@ -74,6 +75,7 @@ const checkbox = (name: string) =>
   screen.getByRole('checkbox', { name: new RegExp(`^${name}(, ${ex.yours})?, `) });
 
 beforeEach(async () => {
+  resetSessionStore();
   resetSupabaseMock({ signedIn: true, profile: onboardedProfile() });
   seedLibraryExercises(LIBRARY);
   resetDraftStore();
@@ -691,8 +693,10 @@ describe('"+" → Gym', () => {
     await fireEvent.press(
       screen.getByRole('radio', { name: `Push A. ${en.workouts.exerciseCountOne}` }),
     );
+    // The session starts with the saved workout's exercise.
     expect(await screen.findByRole('header', { name: 'Push A' })).toBeOnTheScreen();
-    expect(screen.getByText(en.session.comingSoon)).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: 'Barbell Bench Press' })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: en.session.finish })).toBeOnTheScreen();
   });
 });
 

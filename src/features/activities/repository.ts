@@ -65,7 +65,8 @@ export function finishActivity(
 }
 
 export type ActivityChanges = Partial<
-  Pick<ActivityRow, 'title' | 'notes' | 'local_date' | 'started_at' | 'ended_at' | 'bodyweight_kg'>
+  // No notes in v1 (activities.notes stays empty).
+  Pick<ActivityRow, 'title' | 'local_date' | 'started_at' | 'ended_at' | 'bodyweight_kg'>
 >;
 
 export async function updateActivity(
@@ -155,7 +156,14 @@ export async function listActivitySummaries(
     await supabase.rpc('list_activity_summaries', {
       p_limit: options.limit,
       ...(options.before
-        ? { p_before_date: options.before.localDate, p_before_id: options.before.id }
+        ? {
+            p_before_date: options.before.localDate,
+            p_before_id: options.before.id,
+            // Null when that row had no start time.
+            ...(options.before.startedAt !== null
+              ? { p_before_started_at: options.before.startedAt }
+              : {}),
+          }
         : {}),
     }),
   );

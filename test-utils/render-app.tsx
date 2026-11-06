@@ -16,7 +16,8 @@ import WorkoutScreen from '@/app/(app)/activities/[id]';
 import EditExerciseScreen from '@/app/(app)/exercises/[id]';
 import ExercisesScreen from '@/app/(app)/exercises/index';
 import NewExerciseScreen from '@/app/(app)/exercises/new';
-import SessionScreen from '@/app/(app)/session';
+import FinishScreen from '@/app/(app)/session/finish';
+import SessionScreen from '@/app/(app)/session/index';
 import DeleteAccountScreen from '@/app/(app)/settings/delete-account';
 import EditAnswerScreen from '@/app/(app)/settings/edit';
 import SettingsScreen from '@/app/(app)/settings/index';
@@ -92,7 +93,8 @@ export function renderApp(initialUrl = '/') {
       '(app)/exercises/[id]': EditExerciseScreen,
       '(app)/exercises/index': ExercisesScreen,
       '(app)/exercises/new': NewExerciseScreen,
-      '(app)/session': SessionScreen,
+      '(app)/session/finish': FinishScreen,
+      '(app)/session/index': SessionScreen,
       '(app)/start': StartWorkoutScreen,
       '(app)/templates/[id]': TemplateEditorScreen,
       '(app)/settings/edit': EditAnswerScreen,

@@ -26,17 +26,34 @@ export type ActivitySummary = {
   distanceM: number | null;
 };
 
-// Where the next page starts: the (local_date, id) of the last row received.
-export type ActivityCursor = { localDate: string; id: string };
+// Where the next page starts: the (local_date, started_at, id) of the last row received.
+export type ActivityCursor = { localDate: string; startedAt: string | null; id: string };
+
+type Ordered = { localDate: string; startedAt: string | null; id: string };
+
+/**
+ * The order of the workout list, as Postgres list_activity_summaries sorts it: newest day first;
+ * within a day the latest start first and workouts without a start time last; the id only breaks
+ * exact ties. Negative when `a` comes before `b`.
+ */
+export function compareActivities(a: Ordered, b: Ordered): number {
+  if (a.localDate !== b.localDate) return a.localDate > b.localDate ? -1 : 1;
+  const aStart = a.startedAt === null ? null : Date.parse(a.startedAt);
+  const bStart = b.startedAt === null ? null : Date.parse(b.startedAt);
+  if (aStart !== bStart) {
+    if (aStart === null) return 1;
+    if (bStart === null) return -1;
+    return aStart > bStart ? -1 : 1;
+  }
+  if (a.id === b.id) return 0;
+  return a.id > b.id ? -1 : 1;
+}
 
 // The next page's cursor, or undefined when this page was the last (it came back short).
-export function nextCursor(
-  page: readonly Pick<ActivitySummary, 'localDate' | 'id'>[],
-  pageSize: number,
-): ActivityCursor | undefined {
+export function nextCursor(page: readonly Ordered[], pageSize: number): ActivityCursor | undefined {
   const last = page[page.length - 1];
   if (page.length < pageSize || !last) return undefined;
-  return { localDate: last.localDate, id: last.id };
+  return { localDate: last.localDate, startedAt: last.startedAt, id: last.id };
 }
 
 export function durationSeconds(startedAt: string | null, endedAt: string | null): number | null {

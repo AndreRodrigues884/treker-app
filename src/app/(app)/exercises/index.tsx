@@ -8,6 +8,8 @@ import { interpolate } from '@/core/i18n';
 import { useDataContext } from '@/features/auth/auth-provider';
 import { ExerciseLibrary } from '@/features/exercises/exercise-library';
 import { useExercises } from '@/features/exercises/queries';
+import { GYM_SESSION_PICK } from '@/features/session/pick';
+import { useSessionActions } from '@/features/session/queries';
 import {
   clearPickedExercises,
   setTemplateDraft,
@@ -18,6 +20,7 @@ import { useI18n } from '@/lib/i18n';
 import { colors, sizes, spacing } from '@/theme';
 
 // The exercise library. Without params it is for consulting (own exercises open for editing).
+// ?pick=gym-session adds the ticked exercises to the workout in progress instead.
 // Both modes have "New exercise"; in a multiple choice the new exercise comes back ticked.
 // With ?pick=<template id> it is a multiple choice: the ticked exercises are added, in the order
 // they were ticked, to the template being edited.
@@ -55,14 +58,21 @@ function PickExercises({ session }: { session: string }) {
   const ctx = useDataContext();
   const picked = usePickedExercises(session);
   const exercises = useExercises();
+  const sessionActions = useSessionActions();
 
-  const add = () => {
+  const add = async () => {
     const byId = new Map((exercises.data ?? []).map((exercise) => [exercise.id, exercise]));
-    const chosen = picked.flatMap((id) => {
+    const rows = picked.flatMap((id) => {
       const exercise = byId.get(id);
-      return exercise ? [{ id: exercise.id, unit: exercise.unit }] : [];
+      return exercise ? [exercise] : [];
     });
-    setTemplateDraft(session, (draft) => addExercises(draft, chosen, ctx.newId));
+    if (session === GYM_SESSION_PICK) {
+      // Into the workout in progress, each with "last time".
+      await sessionActions.addExercises(rows);
+    } else {
+      const chosen = rows.map((exercise) => ({ id: exercise.id, unit: exercise.unit }));
+      setTemplateDraft(session, (draft) => addExercises(draft, chosen, ctx.newId));
+    }
     clearPickedExercises(session);
     router.back();
   };
@@ -83,7 +93,7 @@ function PickExercises({ session }: { session: string }) {
           <Button
             label={interpolate(t.exercises.add, { count: picked.length })}
             disabled={picked.length === 0}
-            onPress={add}
+            onPress={() => void add()}
           />
         </View>
       }

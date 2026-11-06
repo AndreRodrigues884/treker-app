@@ -18,6 +18,8 @@ export const colors = {
   swim: '#A78BFA',
   record: '#FBBF24',
   positive: '#34D399',
+  // Amber, for "medium" effort.
+  warning: '#FBBF24',
   // ~7:1 contrast on bg, ~6.5:1 on surface.
   danger: '#F87171',
   // Fill of destructive buttons, with white text on it (~4.8:1).
@@ -29,6 +31,7 @@ export const colors = {
   swimTint: 'rgba(167, 139, 250, 0.14)',
   recordTint: 'rgba(251, 191, 36, 0.14)',
   positiveTint: 'rgba(52, 211, 153, 0.14)',
+  warningTint: 'rgba(251, 191, 36, 0.14)',
   dangerTint: 'rgba(248, 113, 113, 0.14)',
 
   // Dims the screen behind a dialog (bg at 80%).
@@ -37,12 +40,13 @@ export const colors = {
 
 export type ColorToken = keyof typeof colors;
 
-export type AccentTone = 'gym' | 'swim' | 'record' | 'positive' | 'danger';
+export type AccentTone = 'gym' | 'swim' | 'record' | 'positive' | 'warning' | 'danger';
 
 export const accentTints: Record<AccentTone, ColorToken> = {
   gym: 'gymTint',
   swim: 'swimTint',
   record: 'recordTint',
   positive: 'positiveTint',
+  warning: 'warningTint',
   danger: 'dangerTint',
 };

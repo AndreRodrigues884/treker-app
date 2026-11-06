@@ -82,8 +82,8 @@ Uma linha por treino, de qualquer modalidade. É a base do calendário, do perfi
 | `type` | `gym` ou `swim` |
 | `local_date` | Dia do treino no calendário do atleta |
 | `timezone` | Fuso onde o treino aconteceu |
-| `started_at`, `ended_at` | Início e fim (opcionais; o fim nunca é antes do início) |
-| `title`, `notes` | Título e notas |
+| `started_at`, `ended_at` | Início e fim (opcionais; o fim nunca é antes do início). A sessão de ginásio da app não regista o fim (nem a duração): envia `ended_at` vazio |
+| `title`, `notes` | Título e notas. As notas ficaram fora da v1: a app não as escreve e a coluna fica vazia, pronta para quando voltarem |
 | `visibility` | `private` (por defeito), `followers` ou `public` |
 | `template_id` | Treino guardado que deu origem a esta sessão (só gym) |
 | `bodyweight_kg` | Peso corporal **nesse dia** (privado). Se a app não o enviar, é copiado do perfil quando a atividade é criada. Mudar o peso no perfil depois não altera atividades antigas |
@@ -96,8 +96,9 @@ Uma linha por treino, de qualquer modalidade. É a base do calendário, do perfi
 | `set_number` | Número da série dentro do exercício |
 | `weight_kg` | Carga em kg (3 casas decimais para que valores em lb não se percam). Nos exercícios com peso corporal é o peso **adicionado**; negativo significa assistência (máquina de elevações assistidas) |
 | `reps` ou `duration_s` | Repetições **ou** segundos, conforme a unidade do exercício. Nunca os dois |
-| `rpe` | Esforço percebido de 1 a 10, em passos de 0,5 (opcional) |
-| `is_warmup` | Séries de aquecimento ficam fora do volume, 1RM e PRs |
+| `difficulty` | Como correu a série: `easy`, `medium` ou `hard` (opcional). É o que a app regista; não mexe nos recordes |
+| `rpe` | Esforço percebido de 1 a 10, em passos de 0,5 (opcional). A app deixou de o usar (substituído por `difficulty`); a coluna fica |
+| `is_warmup` | Séries de aquecimento ficam fora do volume, 1RM e PRs. A sessão da v1 não tem aquecimentos, por isso a app envia sempre `false` |
 
 ### `swim_entries` — tempos de natação
 
@@ -183,12 +184,13 @@ As funções dos triggers vivem no schema `private`, que não está exposto pela
 
 ### Listar treinos com os totais
 
-`public.list_activity_summaries(p_before_date date, p_before_id uuid, p_limit int)` devolve uma página dos treinos do atleta (os do Perfil), os mais recentes primeiro, já com os totais de cada um. Os totais são calculados no Postgres, por isso a app nunca carrega as séries todas para os somar.
+`public.list_activity_summaries(p_before_date date, p_before_started_at timestamptz, p_before_id uuid, p_limit int)` devolve uma página dos treinos do atleta (os do Perfil), os mais recentes primeiro, já com os totais de cada um. Os totais são calculados no Postgres, por isso a app nunca carrega as séries todas para os somar.
 
-- **Paginação por cursor, nunca por offset.** A primeira página vai sem cursor. A seguinte passa o `(local_date, id)` da última linha recebida e recebe as linhas estritamente antes dela, pela ordem `local_date desc, id desc`.
-  - Essa ordem é servida pelo índice `activities (user_id, local_date desc, id desc)`.
+- **Paginação por cursor, nunca por offset.** A primeira página vai sem cursor. A seguinte passa o `(local_date, started_at, id)` da última linha recebida e recebe as linhas estritamente depois dela, pela ordem `local_date desc, started_at desc nulls last, id desc`.
+  - Num mesmo dia, o treino que começou mais tarde vem primeiro; os treinos sem hora de início vêm no fim do dia. O `id` só desempata treinos com a mesma hora.
+  - O `started_at` do cursor pode ser vazio (a última linha não tinha hora de início); a data e o id não.
+  - Essa ordem é servida pelo índice `activities (user_id, local_date desc, started_at desc nulls last, id desc)`, que também serve o calendário.
   - Treinos acrescentados ou apagados entretanto nunca fazem uma página repetir ou saltar linhas.
-  - Num mesmo dia, a ordem é pelo `id`.
 - **No máximo 50 linhas por página**, bem abaixo do `max_rows` da API (a app pede 10).
 - **Totais de cada treino:**
 
@@ -205,8 +207,52 @@ As funções dos triggers vivem no schema `private`, que não está exposto pela
   - os totais de ginásio e de natação;
   - os treinos apagados e os de outros utilizadores ficam de fora;
   - as páginas não repetem nem saltam linhas, mesmo com treinos novos entretanto;
+  - dois treinos no mesmo dia pela hora de início, e os sem hora no fim do dia;
   - o limite de 50 linhas e o cursor incompleto;
   - o anónimo não pode chamar a função.
+
+### Gravar uma sessão de ginásio
+
+`public.save_gym_session(p_session jsonb)` grava um treino de ginásio terminado, chamada pela app por `rpc` num só pedido, quando o atleta carrega em "Gravar":
+
+```json
+{
+  "id": "uuid da atividade", "local_date": "2026-11-05", "timezone": "Europe/Lisbon",
+  "started_at": "…", "ended_at": null, "title": "Push A", "template_id": "uuid",
+  "sets": [
+    { "id": "uuid da série", "exercise_id": "uuid", "exercise_position": 0, "set_number": 1,
+      "weight_kg": 100, "reps": 5, "duration_s": null, "difficulty": "easy", "is_warmup": false }
+  ]
+}
+```
+
+- **Numa só transação** cria a atividade (`gym`, com a data local e o fuso do atleta no início do treino) e todas as séries, com os ids gerados no telemóvel.
+- A função ainda aceita `notes`, mas a app não o envia: as notas ficaram fora da v1.
+- **Repetir o mesmo pedido não duplica nada:** a atividade e as séries entram com `on conflict do nothing` pelos ids, e a função devolve outra vez os mesmos recordes. É isto que torna seguro o "Tentar outra vez" depois de uma falha de rede, mesmo que o primeiro pedido tenha chegado ao servidor.
+- **Os recordes são reconstruídos uma só vez por exercício.** As séries entram todas numa só instrução `insert`, e o trigger dos recordes corre uma vez por instrução. Por isso não é precisa a marca `treker.defer_record_rebuild` do `delete_activity`; o teste confirma 3 reconstruções para 3 exercícios, não 5 para 5 séries.
+- **Devolve os recordes novos desta atividade** (linhas de `personal_records` com este `activity_id`), já depois da reconstrução. São os recordes "oficiais" que a app mostra no fim.
+- **Ou grava tudo, ou nada:** um valor impossível (por exemplo 0 reps), um exercício próprio de outro utilizador ou um treino guardado de outro utilizador cancelam a chamada inteira.
+- É `security invoker`, com `search_path` vazio, e só `authenticated` a pode executar. Um id de atividade que já é de outro utilizador dá erro (`42501`) e não é tocado.
+
+### Última vez de cada exercício
+
+`public.last_performance(p_exercise_ids uuid[])`: para cada exercício, as séries de trabalho da atividade mais recente (não apagada) em que o atleta o fez, com a data.
+
+- "Mais recente" segue a mesma ordem da lista de treinos (`local_date`, depois `started_at`, depois `id`).
+- Ficam de fora os aquecimentos, as séries e as atividades apagadas, e os dados dos outros utilizadores.
+- Cada série vem com o peso, as reps (ou segundos) e a `difficulty`, para a app mostrar "Última vez: 10 kg · 5 reps · Fácil".
+- `work_set_index` numera as séries de trabalho 1, 2, 3…, pela ordem em que foram feitas, para a app mostrar a série N ao lado da série N.
+- `stable`, `security invoker`, só para `authenticated`.
+
+Testes das duas funções em `supabase/tests/18_gym_session.sql`:
+- grava a atividade e as séries de uma vez;
+- repetir não duplica;
+- uma falha a meio não deixa nada;
+- não usa exercícios próprios de outro utilizador nem escreve na atividade de outro;
+- os recordes certos, reconstruídos uma vez por exercício;
+- devolve só os recordes desta atividade;
+- o `last_performance` ignora aquecimentos, atividades apagadas e dados de outros utilizadores, e escolhe a sessão mais recente do dia;
+- o anónimo não pode chamar nenhuma.
 
 ### Gravar um treino guardado
 
@@ -313,7 +359,7 @@ Contam todas as entradas não apagadas, de prova e de treino. Piscinas de 25 m, 
 ### Como é reconstruído
 
 - **Reconstruir uma chave** apaga os recordes dessa chave e percorre o histórico por ordem (`local_date`, `started_at`, ordem do exercício, `set_number`). Grava um recorde sempre que o melhor anterior é batido. No gym recalcula também as `exercise_stats`.
-- **Triggers por instrução** em `gym_sets` e `swim_entries` juntam as chaves tocadas por cada insert, update ou delete e reconstroem cada chave **uma só vez por instrução**, mesmo que a instrução mexa em 50 séries. Alterações que não afetam recordes (como o RPE) não reconstroem nada.
+- **Triggers por instrução** em `gym_sets` e `swim_entries` juntam as chaves tocadas por cada insert, update ou delete e reconstroem cada chave **uma só vez por instrução**, mesmo que a instrução mexa em 50 séries. Alterações que não afetam recordes (como o RPE ou a dificuldade) não reconstroem nada.
 - **Também reconstrói quando:**
   - uma atividade muda de `local_date`, `started_at` ou `bodyweight_kg`, ou é apagada (com `delete_activity`, uma só vez por chave, ver [Apagar uma atividade](#apagar-uma-atividade));
   - um exercício muda de `unit`, `tracks_load` ou `adds_bodyweight`.
@@ -325,7 +371,8 @@ Por isso, corrigir um tempo impossível (por exemplo 15,00 nos 50 m) faz reapare
 
 | Para quê | Índice |
 | --- | --- |
-| Calendário e histórico, paginados por cursor (`list_activity_summaries`) | `activities (user_id, local_date desc, id desc)` |
+| Calendário e histórico, paginados por cursor (`list_activity_summaries`) | `activities (user_id, local_date desc, started_at desc nulls last, id desc)` |
+| Última vez de cada exercício (`last_performance`) | `gym_sets (user_id, exercise_id)` |
 | Recordes de um treino | `personal_records (activity_id)` |
 | Séries de uma sessão | `gym_sets (activity_id)` |
 | Histórico de um exercício | `gym_sets (user_id, exercise_id)` |
@@ -357,5 +404,5 @@ O Studio local fica em http://127.0.0.1:54323.
 
 ## Por fazer
 
-- A função `save_gym_session` (gravar uma sessão inteira numa só chamada) e os totais semanais.
+- Os totais semanais.
 - Quando houver muitos dados, medir com `explain` o custo da reconstrução de uma chave com histórico longo.

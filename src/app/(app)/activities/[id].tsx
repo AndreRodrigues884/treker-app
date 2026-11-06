@@ -34,6 +34,7 @@ import type {
 } from '@/features/activities/repository';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useExercises } from '@/features/exercises/queries';
+import { difficultyLabel, difficultyTone } from '@/features/session/difficulty';
 import { sportLabel } from '@/features/onboarding/labels';
 import { getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
@@ -201,6 +202,7 @@ function GymSets({
                   interpolate(t.workout.setNumber, { number: set.set_number }),
                   setText(set, units),
                   set.is_warmup ? t.workout.warmup : null,
+                  set.difficulty ? difficultyLabel(t, set.difficulty) : null,
                   recordSets.has(set.id) ? t.records.prLabel : null,
                 ]
                   .filter(Boolean)
@@ -213,6 +215,12 @@ function GymSets({
                   {setText(set, units)}
                 </AppText>
                 {set.is_warmup && <Badge label={t.workout.warmup} />}
+                {set.difficulty && (
+                  <Badge
+                    label={difficultyLabel(t, set.difficulty)}
+                    tone={difficultyTone[set.difficulty]}
+                  />
+                )}
                 {recordSets.has(set.id) && <PrBadge />}
               </View>
             ))}

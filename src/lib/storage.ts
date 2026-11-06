@@ -1,13 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Small JSON values kept on the phone. Not for secrets (the session has its own encrypted
-// storage) nor for workout data (the offline database comes in step 6). Failures are swallowed:
-// losing one of these values only means asking again.
+// Small JSON values kept on the phone. Not for secrets (the sign-in session has its own encrypted
+// storage). The gym session in progress is kept here until it is saved (see
+// src/features/session/session-store.ts). Failures are swallowed: losing one of these values only
+// means asking again.
 
 export const storageKeys = {
   introSeen: 'treker.intro-seen',
   language: 'treker.language',
   onboardingDraft: (userId: string) => `treker.onboarding-draft.${userId}`,
+  gymSession: (userId: string) => `treker.gym-session.${userId}`,
+  restNotificationsAsked: 'treker.rest-notifications-asked',
 } as const;
 
 export async function readJson(key: string): Promise<unknown> {

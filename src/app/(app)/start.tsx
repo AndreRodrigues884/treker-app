@@ -9,15 +9,17 @@ import { interpolate } from '@/core/i18n';
 import type { Sport } from '@/core/onboarding';
 import { useAuth } from '@/features/auth/auth-provider';
 import { sportLabel } from '@/features/onboarding/labels';
+import { useStartGymSession } from '@/features/session/queries';
 import { useTemplates } from '@/features/templates/queries';
+import type { TemplateWithExercises } from '@/features/templates/repository';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
 
 const sportIcons = { gym: Dumbbell, swim: Waves } as const;
 
 // Opened by the "+" button. Shows only the sports chosen in onboarding. Gym lists the saved
-// workouts and "Empty workout"; either opens the session (provisional until phase 1b). Swimming
-// arrives later.
+// workouts and "Empty workout"; either starts the gym session (its sets filled in from last time)
+// and opens it. Swimming arrives later.
 export default function StartWorkoutScreen() {
   const { t } = useI18n();
   const { profile } = useAuth();
@@ -61,11 +63,16 @@ export default function StartWorkoutScreen() {
 function GymWorkouts() {
   const { t } = useI18n();
   const templates = useTemplates();
+  const start = useStartGymSession();
 
-  // Closes this modal, then opens the session.
-  const open = (params: { template?: string }) => {
-    router.back();
-    router.push({ pathname: '/session', params });
+  // Starts the session, closes this modal, then opens the session.
+  const open = (template: TemplateWithExercises | null) => {
+    start.mutate(template, {
+      onSuccess: () => {
+        router.back();
+        router.push('/session');
+      },
+    });
   };
 
   return (
@@ -82,27 +89,43 @@ function GymWorkouts() {
           retrying={templates.isFetching}
         />
       )}
-      {templates.isPending && <AppText color="muted">{t.common.loading}</AppText>}
-      {templates.data?.map(({ template, exercises }) => (
-        <OptionCard
-          key={template.id}
-          title={template.name}
-          description={
-            exercises.length === 1
-              ? t.workouts.exerciseCountOne
-              : interpolate(t.workouts.exerciseCount, { count: exercises.length })
-          }
-          icon={ClipboardList}
-          selected={false}
-          onPress={() => open({ template: template.id })}
+      {start.error && (
+        <ErrorNotice
+          message={t.common.errors[classifyRequestError(start.error)]}
+          network={classifyRequestError(start.error) === 'network'}
+          onRetry={() => start.variables !== undefined && open(start.variables)}
+          retryLabel={t.common.retry}
+          retrying={start.isPending}
         />
-      ))}
+      )}
+      {(templates.isPending || start.isPending) && (
+        <AppText color="muted" accessibilityLiveRegion="polite">
+          {t.common.loading}
+        </AppText>
+      )}
+      {templates.data?.map((entry) => {
+        const { template, exercises } = entry;
+        return (
+          <OptionCard
+            key={template.id}
+            title={template.name}
+            description={
+              exercises.length === 1
+                ? t.workouts.exerciseCountOne
+                : interpolate(t.workouts.exerciseCount, { count: exercises.length })
+            }
+            icon={ClipboardList}
+            selected={false}
+            onPress={() => open(entry)}
+          />
+        );
+      })}
       <OptionCard
         title={t.session.emptyWorkout}
         description={t.start.emptyWorkoutHint}
         icon={Plus}
         selected={false}
-        onPress={() => open({})}
+        onPress={() => open(null)}
       />
     </View>
   );

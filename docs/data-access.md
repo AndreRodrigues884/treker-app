@@ -29,6 +29,7 @@ Fora dos repositórios, só o login (`src/features/auth/api.ts`) fala com o Supa
 | `gym` | Acrescentar, editar, apagar e listar séries |
 | `swim` | Acrescentar, editar e apagar tempos de natação |
 | `exercises` | Listar a biblioteca e os exercícios próprios; criar, editar, eliminar e procurar exercícios próprios |
+| `session` | Gravar uma sessão de ginásio num só pedido (`save_gym_session`); a última vez de cada exercício (`last_performance`); os recordes atuais, para o selo de PR na hora |
 | `templates` | Listar e ler treinos guardados com os seus exercícios; gravar um treino e a sua lista num só pedido (`save_workout_template`); apagar |
 | `profile` | Ler e editar o perfil, concluir o onboarding, apagar a conta |
 
@@ -36,7 +37,7 @@ Recebem um `DataContext` (`src/lib/data/context.ts`): o id do atleta, o relógio
 
 Regras:
 
-- **Listas longas carregam por páginas, com cursor.** O histórico de treinos no Perfil usa `useActivitySummaries` (`useInfiniteQuery`), 10 treinos de cada vez, com o cursor `(local_date, id)` da última linha (`nextCursor` em `src/core/activities`). Nunca se usa offset nem se carrega o histórico todo. Qualquer gravação de treino (`useTrainingMutation`) invalida `['user', id, 'activities']` e, por isso, também estas páginas; gravar uma sessão vai fazer o mesmo.
+- **Listas longas carregam por páginas, com cursor.** O histórico de treinos no Perfil usa `useActivitySummaries` (`useInfiniteQuery`), 10 treinos de cada vez, com o cursor `(local_date, started_at, id)` da última linha (`nextCursor` em `src/core/activities`). Nunca se usa offset nem se carrega o histórico todo. Qualquer gravação de treino (`useTrainingMutation`, e gravar uma sessão) invalida `['user', id, 'activities']` e, por isso, também estas páginas.
 - **Os ids são gerados no telemóvel**, e criar faz `upsert` por id. Repetir um pedido depois de uma falha de rede nunca duplica uma linha, desde que se use o mesmo id. As funções de criação aceitam um `id` opcional para isso; os hooks geram-no **antes** do pedido e "Tentar outra vez" repete-o com o mesmo.
 - **Gravar um treino guardado é um só pedido**, à função Postgres `save_workout_template` ([database.md](database.md#gravar-um-treino-guardado)): o treino e a lista inteira numa transação, com os ids do telemóvel.
 - **Eliminar um exercício próprio é um só pedido**, à função Postgres `delete_custom_exercise` ([database.md](database.md#eliminar-um-exercício-próprio)): sai da biblioteca e dos treinos guardados; os treinos feitos e os recordes mantêm-se. A lista de exercícios inclui os eliminados, para os treinos já registados continuarem a mostrar o nome; a biblioteca esconde-os.
@@ -60,6 +61,8 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 | `['user', id, 'activities', 'detail', atividade]` | Uma atividade com as séries e os tempos |
 | `['user', id, 'activities', 'detail', atividade, 'records']` | Os recordes desse treino (ecrã de detalhe) |
 | `['user', id, 'activities', 'summaries']` | Os treinos do Perfil com os totais, por páginas (`useInfiniteQuery`) |
+| `['user', id, 'activities', 'last', exercícios]` | A última vez de cada exercício, ao começar uma sessão ou acrescentar exercícios |
+| `['user', id, 'records', 'current', 'gym']` | O melhor 1RM atual de cada exercício (selo de PR durante a sessão) |
 | `['user', id, 'exercises']` | A biblioteca e os exercícios próprios (frescos 5 min) |
 | `['user', id, 'templates', 'list']` | Os treinos guardados com os seus exercícios |
 | `['user', id, 'templates', 'detail', treino]` | Um treino guardado, no editor |
@@ -74,6 +77,32 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 - **Os dados ficam "frescos" 30 s.** Depois disso voltam a ser pedidos quando a app regressa a primeiro plano (`AppState`) ou quando a rede volta (NetInfo), como recomenda a documentação do TanStack Query para React Native.
 - **Os pedidos correm mesmo quando o telemóvel diz que não tem rede** (`networkMode: 'always'`). Assim falham depressa com um erro claro, em vez de ficarem à espera em silêncio.
 - **Novas tentativas:** as leituras tentam mais uma vez em erros de rede, e os erros do servidor não se repetem. As gravações não são repetidas sozinhas: quem as repete é o atleta, com "Tentar outra vez".
+
+## A sessão de ginásio (treino em curso)
+
+O treino em curso **não vai para o servidor enquanto decorre**. É um rascunho no telemóvel, e só "Terminar" → "Gravar" o envia, num só pedido e numa só transação (`save_gym_session`).
+
+```mermaid
+flowchart LR
+  P["+ → Ginásio"] -->|last_performance| D[Rascunho no telemóvel]
+  D -->|cada alteração| A[(AsyncStorage)]
+  D -->|Gravar| S[(save_gym_session)]
+  S -->|sucesso: apaga o rascunho, invalida activities e records| Q[Hoje e Perfil]
+  S -->|falha: o rascunho fica| D
+```
+
+- **Onde vive:** `src/features/session/session-store.ts`, uma store em memória, gravada em AsyncStorage (`treker.gym-session.<utilizador>`) a cada alteração. Fechar a app, ou o telemóvel matá-la, não perde nada: no arranque seguinte o "Hoje" mostra o cartão "Treino em curso" com "Continuar" e "Descartar".
+  - O rascunho é lido com validação (`parseSession` em `src/core/session`), e um rascunho estragado, de outra versão ou de outro utilizador é ignorado.
+- **Um de cada vez:** com um treino em curso, o "+" abre esse treino em vez de começar outro.
+- **Toda a lógica é pura** (`src/core/session`): começar a partir de um treino guardado, pré-preencher com a última vez ou com o alvo, o plano de cada exercício (séries × alvo, o lápis), gravar uma série com "OK" (valores e dificuldade: fácil, médio ou difícil), só as séries feitas contam, PR na hora com `src/core/records`, temporizador e o pedido para o `save_gym_session`. Não há aquecimentos na sessão.
+- **No ecrã**, cada exercício mostra um quadrado por série; tocar num abre o painel da série (última vez, peso, reps, dificuldade, Cancelar / OK). Uma série feita fica verde (fácil), amarela (médio) ou vermelha (difícil). Os cartões mudam de ordem arrastando a pega; o leitor de ecrã tem as ações "Subir" e "Descer" nessa pega.
+- **Pesos:** ficam como o atleta os escreve, na unidade do perfil, e são convertidos para kg (`src/core/units`) ao estimar o 1RM e ao gravar.
+- **PR na hora:** ao dar uma série como feita, o 1RM estimado é comparado com o recorde atual em cache e com as séries já feitas nesta sessão. É só uma indicação; os recordes oficiais são os que o `save_gym_session` devolve depois de gravar.
+- **Sem duração:** a app não regista quanto tempo dura o treino. Não há relógio na sessão nem duração no resumo, e o pedido leva `ended_at` vazio. Guarda só a hora de início, que dá a data local e a ordem dos treinos do mesmo dia.
+- **Gravar:** o pedido é feito só a partir do rascunho, por isso "Tentar outra vez" envia exatamente o mesmo pedido, com os mesmos ids, e o servidor não duplica nada. Só com sucesso é que o rascunho é apagado.
+- **Temporizador de descanso:** enquanto se descansa, sobe do fundo do ecrã uma folha com uma bola com a contagem decrescente no meio (e um anel que se esvazia), − e + (15 s) de cada lado e "Saltar" centrado por baixo. A folha desce quando o descanso acaba ou é saltado, e a lista da sessão deixa espaço por baixo para as últimas séries continuarem ao alcance. Guarda a hora de fim do descanso, não um contador, por isso está certo depois de a app ir para segundo plano. Uma notificação local (`expo-notifications`) é agendada para essa hora, e aparece também com o ecrã bloqueado, com vibração. É cancelada ao saltar o descanso, ao terminar ou ao descartar o treino.
+  - A permissão é pedida no primeiro treino, com uma frase a explicar porquê. Sem permissão, o temporizador no ecrã funciona na mesma.
+  - As notificações locais funcionam no Expo Go; só as push precisam de uma build de desenvolvimento.
 
 ## Sem rede
 
@@ -109,6 +138,13 @@ Antes disso, a Fase 1 guarda o **treino em curso num rascunho no telemóvel** at
 
 - `__tests__/data/repositories-test.ts`: os repositórios contra o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts), uma base em memória). Inclui: repetir uma criação com o mesmo id não duplica; apagar marca `deleted_at` (também em cascata); contagens e listas por datas; erros de rede.
 - `__tests__/app/today-test.tsx`: a contagem semanal do "Hoje", o erro com "Tentar outra vez", e uma gravação de treino a atualizar a contagem.
+- `__tests__/app/session-test.tsx`:
+  - o fluxo completo, do "+" até ao treino aparecer no Perfil (última vez, PR na hora, descanso e notificação, resumo, gravar, recordes oficiais);
+  - a permissão das notificações;
+  - retomar depois de a app fechar;
+  - o "+" com um treino em curso;
+  - descartar;
+  - a falha de rede ao gravar, com "Tentar outra vez", sem perder nem duplicar nada.
 - `__tests__/app/workout-history-test.tsx`:
   - os treinos no Perfil com o título, a data, a duração, as séries e o volume (ou a distância);
   - as páginas por cursor ("Mostrar mais");

@@ -16,6 +16,10 @@ export const queryKeys = {
     ['user', userId, 'activities', 'detail', activityId] as const,
   activityRecords: (userId: string, activityId: string) =>
     ['user', userId, 'activities', 'detail', activityId, 'records'] as const,
+  lastPerformance: (userId: string, exerciseIds: readonly string[]) =>
+    ['user', userId, 'activities', 'last', [...exerciseIds].sort().join(',')] as const,
+  records: (userId: string) => ['user', userId, 'records'] as const,
+  currentGymRecords: (userId: string) => ['user', userId, 'records', 'current', 'gym'] as const,
   exercises: (userId: string) => ['user', userId, 'exercises'] as const,
   templates: (userId: string) => ['user', userId, 'templates'] as const,
   templateList: (userId: string) => ['user', userId, 'templates', 'list'] as const,

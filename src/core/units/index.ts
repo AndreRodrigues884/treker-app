@@ -10,6 +10,15 @@ export function parseDecimal(input: string): number | null {
   return Number(normalized);
 }
 
+// Like parseDecimal, but a leading minus is allowed: assistance on a pull-up machine ("-20").
+export function parseSignedDecimal(input: string): number | null {
+  const trimmed = input.trim();
+  const negative = trimmed.startsWith('-');
+  const value = parseDecimal(negative ? trimmed.slice(1) : trimmed);
+  if (value === null) return null;
+  return negative ? -value : value;
+}
+
 // Rounded to 0.01 kg, the precision of profiles.bodyweight_kg.
 export function toKilograms(value: number, unit: WeightUnit): number {
   const kg = unit === 'kg' ? value : value * KG_PER_LB;

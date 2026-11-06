@@ -38,9 +38,9 @@ A mudança mais importante é passar de páginas por grupo muscular para **sess�
 
 | Hoje | Passa a ser | Área | Prioridade | Porquê |
 | --- | --- | --- | --- | --- |
-| Exercícios organizados por página de grupo muscular; "Save session" grava um grupo de cada vez | Sessão de treino ("Treino A", "Push day") com início, fim e notas; grupo muscular só como etiqueta | Gym | P0 | Os atletas pensam em treinos, não em grupos; um treino de corpo inteiro hoje obriga a várias gravações |
+| Exercícios organizados por página de grupo muscular; "Save session" grava um grupo de cada vez | Sessão de treino ("Treino A", "Push day") com hora de início; a duração não é registada, e as notas foram adiadas (fora da v1); grupo muscular só como etiqueta | Gym | P0 | Os atletas pensam em treinos, não em grupos; um treino de corpo inteiro hoje obriga a várias gravações |
 | Exercícios só personalizados | Biblioteca partilhada + exercícios personalizados | Gym | P0 | Facilita registo, ícones, grupos musculares, importações e comparações |
-| Dificuldade fácil/médio/difícil | RPE ou RIR por série | Gym | P0 | Escalas padrão para quem treina a sério; três níveis são vagos |
+| Dificuldade fácil/médio/difícil | **Decisão de nov. 2026: fica Fácil / Médio / Difícil por série** (coluna `gym_sets.difficulty`), com cor (verde, amarelo, vermelho) nos quadrados das séries. O RPE deixa de ser usado pela app; a coluna `rpe` fica na base de dados | Gym | P0 | Mais rápido de registar a meio do treino e fácil de ler de relance. Antes: "RPE ou RIR", que exige conhecer a escala |
 | Apagar só o último registo | Editar e apagar qualquer registo, com reconstrução dos PRs | Gym, Natação | P0 | Um erro antigo não pode ficar para sempre nos gráficos e recordes |
 | Datas gravadas em UTC | Data local do atleta | Base | P0 | Treinos depois da meia-noite ou noutros fusos ficam no dia errado |
 | Tempos de natação sem tipo de piscina | Piscina curta (25 m) ou longa (50 m) em cada tempo | Natação | P0 | Os tempos não são comparáveis; recordes e mínimos são sempre separados |
@@ -70,9 +70,9 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 | --- | --- | --- | --- |
 | ~~Offline-first: base local (SQLite) com sincronização e sem duplicados~~ **Adiado (fora da v1)**: a v1 funciona só com rede | Base | — | Ginásios em caves e piscinas têm rede fraca; volta depois de validar a v1 (ver docs/data-access.md, "Voltar ao offline") |
 | Temporizador de descanso com notificação no ecrã bloqueado | Gym | P0 | Das funções mais usadas; mantém a app aberta durante o treino |
-| Séries de aquecimento fora das estatísticas | Gym | P0 | Sem isto, volume, 1RM e PRs ficam sujos |
+| ~~Séries de aquecimento fora das estatísticas~~ **Adiado na sessão (fora da v1)** | Gym | — | A sessão não tem aquecimentos: o atleta regista só as séries de trabalho. A base de dados continua a suportar `is_warmup` (fora do volume, 1RM e PRs), para voltar mais tarde |
 | Histórico em calendário com Gym e Natação juntos | Base | P0 | É a vista que mostra o diferencial multi-modalidade |
-| Notas por sessão | Gym, Natação | P0 | Explica um dia mau nos gráficos meses depois |
+| ~~Notas por sessão~~ **Adiado (fora da v1)** | Gym, Natação | — | Explicaria um dia mau nos gráficos meses depois, mas não é necessário por agora. A coluna `activities.notes` fica na base de dados, vazia, para ser fácil voltar a ter notas |
 | Perfil privado com lista de atividades recentes | Base | P0 | Página "Eu"; preparada para ser pública no futuro |
 | Cartão de partilha para Instagram/WhatsApp no fim da atividade | Gym, Natação | P0 | Publicidade grátis junto de pessoas que treinam |
 | Exportar dados em CSV | Base | P0 | Confiança e direito de portabilidade (RGPD) |
@@ -142,10 +142,10 @@ A regra de fundo: **o trabalho pesado acontece no Postgres, perto dos dados, e a
 | Tabela | Guarda | Notas |
 | --- | --- | --- |
 | `profiles` | Nome, foto, unidades, fuso horário, `visibility` | Peso corporal numa coluna privada |
-| `activities` | Uma linha por treino: tipo (`gym`, `swim`, `run`), `local_date`, início, fim, título, notas, `visibility` | Base do perfil, calendário, partilha e feed |
+| `activities` | Uma linha por treino: tipo (`gym`, `swim`, `run`), `local_date`, início (ordena os treinos do mesmo dia), fim (a sessão de ginásio não regista o fim nem a duração na v1), título, notas (vazias na v1), `visibility` | Base do perfil, calendário, partilha e feed |
 | `exercises` | Biblioteca partilhada (`user_id` nulo) e exercícios personalizados | Grupo muscular como etiqueta |
 | `workout_templates` | Treinos guardados ("Treino A") e a ordem dos exercícios | Substitui as rotinas por grupo muscular |
-| `gym_sets` | Séries de uma atividade: exercício, peso, reps, RPE, aquecimento | Chave estrangeira para a atividade do mesmo utilizador |
+| `gym_sets` | Séries de uma atividade: exercício, peso, reps, dificuldade (fácil/médio/difícil), aquecimento (não usado na v1) | Chave estrangeira para a atividade do mesmo utilizador |
 | `swim_entries` | Estilo, distância, tipo de piscina, tempo, prova ou treino, parciais | Um treino de natação tem várias entradas |
 | `personal_records` | PRs de todas as modalidades, com a origem | Escrita só por funções do servidor |
 | `user_stats` | Agregados: melhor 1RM por exercício, volume total, totais semanais | Atualizada na mesma transação |

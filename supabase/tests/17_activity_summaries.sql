@@ -2,7 +2,7 @@
 begin;
 \ir helpers.psql
 
-select plan(13);
+select plan(17);
 
 select tests.authenticate_as('aaaaaaaa-0000-0000-0000-000000000000');
 
@@ -89,14 +89,15 @@ select results_eq(
 
 select results_eq(
   $$ select id from public.list_activity_summaries(
-       '2026-10-02', 'aaaaaaaa-0000-0000-0008-000000000002', 2) $$,
+       p_before_date => '2026-10-02', p_before_id => 'aaaaaaaa-0000-0000-0008-000000000002',
+       p_limit => 2) $$,
   $$ values ('aaaaaaaa-0000-0000-0008-000000000001'::uuid) $$,
   'the next page starts strictly after the cursor: nothing repeated, nothing skipped'
 );
 
 select is_empty(
   $$ select 1 from public.list_activity_summaries(
-       '2026-10-01', 'aaaaaaaa-0000-0000-0008-000000000001', 2) $$,
+       '2026-10-01', '2026-10-01 10:00+00', 'aaaaaaaa-0000-0000-0008-000000000001', 2) $$,
   'after the last row: an empty page'
 );
 
@@ -107,7 +108,8 @@ select tests.add_activity('gym', '2026-10-05', 'aaaaaaaa-0000-0000-0008-00000000
 
 select results_eq(
   $$ select id from public.list_activity_summaries(
-       '2026-10-02', 'aaaaaaaa-0000-0000-0008-000000000002', 2) $$,
+       p_before_date => '2026-10-02', p_before_id => 'aaaaaaaa-0000-0000-0008-000000000002',
+       p_limit => 2) $$,
   $$ values ('aaaaaaaa-0000-0000-0008-000000000001'::uuid),
             ('aaaaaaaa-0000-0000-0008-000000000005'::uuid) $$,
   'pages by cursor are stable while workouts are added'
@@ -120,9 +122,51 @@ select is(
 );
 
 select throws_ok(
-  $$ select * from public.list_activity_summaries('2026-10-02', null, 2) $$,
+  $$ select * from public.list_activity_summaries(
+       p_before_date => '2026-10-02', p_limit => 2) $$,
   '22023', null,
   'a cursor needs both the date and the id'
+);
+
+-- Same day, by start time ----------------------------------------------------------------------
+-- A morning and an evening session on 2026-10-10 (ids chosen so that id order is the opposite of
+-- time order), and one without a start time.
+
+select tests.add_activity('gym', '2026-10-10', 'aaaaaaaa-0000-0000-0008-0000000000f1');
+update public.activities set started_at = '2026-10-10 18:00+00'
+where id = 'aaaaaaaa-0000-0000-0008-0000000000f1';
+select tests.add_activity('gym', '2026-10-10', 'aaaaaaaa-0000-0000-0008-0000000000f2');
+update public.activities set started_at = '2026-10-10 07:30+00'
+where id = 'aaaaaaaa-0000-0000-0008-0000000000f2';
+select tests.add_activity('gym', '2026-10-10', 'aaaaaaaa-0000-0000-0008-0000000000f3');
+
+select results_eq(
+  $$ select id from public.list_activity_summaries(p_limit => 3) $$,
+  $$ values ('aaaaaaaa-0000-0000-0008-0000000000f1'::uuid),
+            ('aaaaaaaa-0000-0000-0008-0000000000f2'::uuid),
+            ('aaaaaaaa-0000-0000-0008-0000000000f3'::uuid) $$,
+  'the same day: the latest start first, workouts without a start time last'
+);
+
+select results_eq(
+  $$ select id from public.list_activity_summaries(
+       '2026-10-10', '2026-10-10 18:00+00', 'aaaaaaaa-0000-0000-0008-0000000000f1', 1) $$,
+  $$ values ('aaaaaaaa-0000-0000-0008-0000000000f2'::uuid) $$,
+  'a page that ends on the evening session continues with the morning one'
+);
+
+select results_eq(
+  $$ select id from public.list_activity_summaries(
+       '2026-10-10', '2026-10-10 07:30+00', 'aaaaaaaa-0000-0000-0008-0000000000f2', 1) $$,
+  $$ values ('aaaaaaaa-0000-0000-0008-0000000000f3'::uuid) $$,
+  'then the one without a start time'
+);
+
+select results_eq(
+  $$ select id from public.list_activity_summaries(
+       '2026-10-10', null, 'aaaaaaaa-0000-0000-0008-0000000000f3', 1) $$,
+  $$ values ('aaaaaaaa-0000-0000-0008-000000000006'::uuid) $$,
+  'and after it, the previous day'
 );
 
 select ok(

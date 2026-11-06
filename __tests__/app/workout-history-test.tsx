@@ -171,6 +171,26 @@ describe('workouts in the Profile', () => {
     expect(rows.indexOf(push)).toBeLessThan(rows.indexOf(swim));
   });
 
+  it('lists two workouts on the same day by start time, the latest first', async () => {
+    // Ids in the opposite order of the start times.
+    activity('a-evening', {
+      title: 'Evening',
+      local_date: '2026-11-04',
+      started_at: '2026-11-04T18:00:00Z',
+    });
+    activity('z-morning', {
+      title: 'Morning',
+      local_date: '2026-11-04',
+      started_at: '2026-11-04T07:30:00Z',
+    });
+    await renderApp('/profile');
+
+    const evening = await screen.findByRole('button', { name: /^Open Evening, / });
+    const morning = screen.getByRole('button', { name: /^Open Morning, / });
+    const rows = screen.getAllByRole('button', { name: /^Open [^,]+, / });
+    expect(rows.indexOf(evening)).toBeLessThan(rows.indexOf(morning));
+  });
+
   it('loads one page at a time by cursor, never the whole history', async () => {
     for (let day = 1; day <= SUMMARY_PAGE_SIZE + 2; day += 1) {
       activity(`a${String(day).padStart(2, '0')}`, {

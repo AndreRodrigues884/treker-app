@@ -182,6 +182,7 @@ export type Database = {
           activity_id: string;
           created_at: string;
           deleted_at: string | null;
+          difficulty: Database['public']['Enums']['set_difficulty'] | null;
           duration_s: number | null;
           exercise_id: string;
           exercise_position: number;
@@ -199,6 +200,7 @@ export type Database = {
           activity_id: string;
           created_at?: string;
           deleted_at?: string | null;
+          difficulty?: Database['public']['Enums']['set_difficulty'] | null;
           duration_s?: number | null;
           exercise_id: string;
           exercise_position: number;
@@ -215,6 +217,7 @@ export type Database = {
           activity_id?: string;
           created_at?: string;
           deleted_at?: string | null;
+          difficulty?: Database['public']['Enums']['set_difficulty'] | null;
           duration_s?: number | null;
           exercise_id?: string;
           exercise_position?: number;
@@ -598,8 +601,26 @@ export type Database = {
       delete_activity: { Args: { p_activity_id: string }; Returns: undefined };
       delete_custom_exercise: { Args: { p_exercise_id: string }; Returns: undefined };
       delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
+      last_performance: {
+        Args: { p_exercise_ids: string[] };
+        Returns: {
+          activity_id: string;
+          difficulty: Database['public']['Enums']['set_difficulty'];
+          duration_s: number;
+          exercise_id: string;
+          local_date: string;
+          reps: number;
+          weight_kg: number;
+          work_set_index: number;
+        }[];
+      };
       list_activity_summaries: {
-        Args: { p_before_date?: string; p_before_id?: string; p_limit?: number };
+        Args: {
+          p_before_date?: string;
+          p_before_id?: string;
+          p_before_started_at?: string;
+          p_limit?: number;
+        };
         Returns: {
           distance_m: number;
           duration_s: number;
@@ -612,6 +633,33 @@ export type Database = {
           type: Database['public']['Enums']['activity_type'];
           volume_kg: number;
         }[];
+      };
+      save_gym_session: {
+        Args: { p_session: Json };
+        Returns: {
+          activity_id: string;
+          created_at: string;
+          distance: number | null;
+          exercise_id: string | null;
+          gym_set_id: string | null;
+          id: string;
+          local_date: string;
+          pool_length: Database['public']['Enums']['pool_length'] | null;
+          previous_value: number | null;
+          sequence: number;
+          stroke: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id: string | null;
+          swim_kind: Database['public']['Enums']['swim_kind'] | null;
+          type: Database['public']['Enums']['activity_type'];
+          user_id: string;
+          value: number;
+        }[];
+        SetofOptions: {
+          from: '*';
+          to: 'personal_records';
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
       };
       save_workout_template: { Args: { p_template: Json }; Returns: undefined };
     };
@@ -645,6 +693,7 @@ export type Database = {
         | 'full_body';
       pool_length: '25m' | '50m' | '25yd';
       pool_unit: 'm' | 'yd';
+      set_difficulty: 'easy' | 'medium' | 'hard';
       swim_kind: 'race' | 'training';
       swim_stroke: 'free' | 'back' | 'breast' | 'fly' | 'im';
       swim_style: 'competitive' | 'fitness';
@@ -795,6 +844,7 @@ export const Constants = {
       ],
       pool_length: ['25m', '50m', '25yd'],
       pool_unit: ['m', 'yd'],
+      set_difficulty: ['easy', 'medium', 'hard'],
       swim_kind: ['race', 'training'],
       swim_stroke: ['free', 'back', 'breast', 'fly', 'im'],
       swim_style: ['competitive', 'fitness'],

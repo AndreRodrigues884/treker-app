@@ -29,7 +29,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 ## Navigation
 
 - Route groups: `(auth)` (intro, email, code), `(onboarding)`, `(app)`; the root `Stack.Protected` guards in `src/features/auth/root-navigator.tsx` decide which is open. "Signed in" only counts once the profile has loaded, so (app) never mounts for a moment and unmounts again.
-- Inside `(app)`: the main screens (Today, Calendar, Records, Profile) live in a side menu, `src/app/(app)/(drawer)/` (Drawer from `expo-router/drawer`, with `DrawerContent` and `MenuButton` from `src/features/navigation`). Other screens (`start` as a modal, `settings/*`, `dev/*`) are pushed on the `(app)` Stack.
+- Inside `(app)`: the main screens (Today, Calendar, Records, Profile) live in a side menu, `src/app/(app)/(drawer)/` (Drawer from `expo-router/drawer`, with `DrawerContent` and `MenuButton` from `src/features/navigation`). Other screens (`start` as a modal, `session` and `session/finish` for the gym session in progress, `settings/*`, `dev/*`) are pushed on the `(app)` Stack.
 - Main screens use `<Screen belowHeader floating={<StartWorkoutButton />}>`: the drawer header covers the top safe area, and the floating "+" opens `/start`.
 - **A navigator's list of screens never changes at runtime.** Never register screens conditionally (or behind a profile value); show or hide content instead. Only the three root groups are opened and closed, by `Stack.Protected`.
 - Tests render the real routes with `test-utils/render-app.tsx`, listed in file (alphabetical) order like on the phone. Reanimated needs the chained resolver in `test-utils/jest-resolver.js` and `setUpTests()` in `jest.setup.ts`.

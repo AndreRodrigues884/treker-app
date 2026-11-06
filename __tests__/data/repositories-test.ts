@@ -19,6 +19,11 @@ import {
 } from '@/features/exercises/repository';
 import { addSet, deleteSet, listSets, updateSet } from '@/features/gym/repository';
 import { completeOnboarding, getProfile, updateProfile } from '@/features/profile/repository';
+import {
+  getCurrentGymRecords,
+  getLastPerformance,
+  saveGymSession,
+} from '@/features/session/repository';
 import { addSwimEntry, deleteSwimEntry } from '@/features/swim/repository';
 import {
   deleteTemplate,
@@ -180,12 +185,13 @@ describe('workout summaries and records', () => {
 
     const second = await listActivitySummaries(ctx, {
       limit: 1,
-      before: { localDate: '2026-11-04', id: swim.id },
+      before: { localDate: '2026-11-04', startedAt: swim.started_at, id: swim.id },
     });
     expect(supabaseMock.rpc).toHaveBeenLastCalledWith('list_activity_summaries', {
       p_limit: 1,
       p_before_date: '2026-11-04',
       p_before_id: swim.id,
+      p_before_started_at: swim.started_at,
     });
     expect(second.map((row) => [row.localDate, row.volumeKg])).toEqual([['2026-11-03', 0]]);
   });
@@ -196,6 +202,65 @@ describe('workout summaries and records', () => {
       { id: 'r2', user_id: TEST_USER_ID, activity_id: 'a2', type: 'gym', value: 90 },
     );
     expect((await listActivityRecords(ctx, 'a1')).map((r) => r.id)).toEqual(['r1']);
+  });
+});
+
+describe('gym session', () => {
+  const payload = {
+    id: 'session-1',
+    local_date: '2026-11-05',
+    timezone: 'Europe/Madrid',
+    started_at: '2026-11-05T09:00:00.000Z',
+    ended_at: null,
+    title: 'Push A',
+    template_id: null,
+    sets: [
+      {
+        id: 'set-1',
+        exercise_id: 'bench',
+        exercise_position: 0,
+        set_number: 1,
+        weight_kg: 100,
+        reps: 5,
+        duration_s: null,
+        difficulty: 'hard' as const,
+        is_warmup: false,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    seedLibraryExercises([{ id: 'bench', name_en: 'Bench Press', name_pt: 'Supino' }]);
+  });
+
+  it('saves the workout in one request, returns its records, and a retry duplicates nothing', async () => {
+    const records = await saveGymSession(ctx, payload);
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('save_gym_session', { p_session: payload });
+    expect(supabaseMock.writes).toHaveLength(0);
+    expect(records.map((r) => [r.exercise_id, r.value])).toEqual([['bench', 116.67]]);
+
+    await saveGymSession(ctx, payload);
+    expect(serverRows('activities')).toHaveLength(1);
+    expect(serverRows('gym_sets')).toHaveLength(1);
+  });
+
+  it('reads last time per exercise and the current records', async () => {
+    await saveGymSession(ctx, payload);
+
+    expect(await getLastPerformance(ctx, ['bench', 'unknown'])).toEqual({
+      bench: [
+        {
+          workSetIndex: 1,
+          weightKg: 100,
+          reps: 5,
+          durationS: null,
+          difficulty: 'hard' as const,
+          localDate: '2026-11-05',
+        },
+      ],
+    });
+    expect(await getLastPerformance(ctx, [])).toEqual({});
+    expect(await getCurrentGymRecords(ctx)).toEqual({ bench: 116.67 });
   });
 });
 

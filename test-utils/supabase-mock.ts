@@ -8,6 +8,8 @@
 // or constraints: those are tested in pgTAP (supabase/tests).
 import type { Session } from '@supabase/supabase-js';
 
+import { compareActivities } from '@/core/activities';
+import { estimateOneRepMax } from '@/core/records';
 import type { Tables } from '@/lib/supabase/database.types';
 
 type AuthListener = (event: string, session: Session | null) => void;
@@ -172,7 +174,8 @@ class Query {
       return { data: null, error: state.profileUpdateError };
     }
 
-    const rows = rowsOf(this.table);
+    // current_records is a view: the best record per exercise.
+    const rows = this.table === 'current_records' ? currentRecords() : rowsOf(this.table);
     let result: Row[];
 
     if (this.operation === 'upsert') {
@@ -272,6 +275,10 @@ export const supabaseMock = {
       exercise.deleted_at = SERVER_NOW;
       return { data: null, ...ok };
     }
+    if (fn === 'save_gym_session') return saveGymSession(args.p_session as Row);
+    if (fn === 'last_performance') {
+      return { data: lastPerformance(args.p_exercise_ids as string[]), error: null };
+    }
     if (fn === 'list_activity_summaries') {
       return { data: listActivitySummaries(args), error: null };
     }
@@ -309,19 +316,27 @@ export const supabaseMock = {
   from: jest.fn((table: string) => new Query(table)),
 };
 
-// Like Postgres list_activity_summaries: newest first by (local_date, id), strictly before the
+// Like Postgres list_activity_summaries: in the list order (compareActivities), strictly after the
 // cursor, at most 50 a page; work sets and volume (assistance as zero) or swim times and metres.
 function listActivitySummaries(args: Row): Row[] {
   const limit = Math.min(Math.max(Number(args.p_limit ?? 20), 1), 50);
   const before =
     args.p_before_date === undefined
       ? null
-      : { date: args.p_before_date as string, id: args.p_before_id as string };
-  const key = (row: Row) => `${row.local_date as string}|${row.id as string}`;
+      : {
+          localDate: args.p_before_date as string,
+          startedAt: (args.p_before_started_at as string | undefined) ?? null,
+          id: args.p_before_id as string,
+        };
+  const ordered = (row: Row) => ({
+    localDate: row.local_date as string,
+    startedAt: (row.started_at as string | null | undefined) ?? null,
+    id: row.id as string,
+  });
   return rowsOf('activities')
     .filter((activity) => activity.user_id === TEST_USER_ID && !activity.deleted_at)
-    .filter((activity) => !before || key(activity) < `${before.date}|${before.id}`)
-    .sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0))
+    .filter((activity) => !before || compareActivities(ordered(activity), before) > 0)
+    .sort((a, b) => compareActivities(ordered(a), ordered(b)))
     .slice(0, limit)
     .map((activity) => {
       const sets = rowsOf('gym_sets').filter(
@@ -364,6 +379,141 @@ function listActivitySummaries(args: Row): Row[] {
             ),
       };
     });
+}
+
+// The latest (best) gym record per exercise, like the current_records view.
+function currentRecords(): Row[] {
+  const best = new Map<string, Row>();
+  for (const record of rowsOf('personal_records')) {
+    if (record.type !== 'gym') continue;
+    const key = record.exercise_id as string;
+    const current = best.get(key);
+    if (!current || (record.value as number) > (current.value as number)) best.set(key, record);
+  }
+  return [...best.values()];
+}
+
+/**
+ * Like Postgres save_gym_session: the activity and its sets in one go (an invalid set saves
+ * nothing), ids from the phone, a repeated call duplicates nothing, another user's activity id is
+ * refused (42501). New records: each work set whose estimated 1RM beats the best so far. Returns
+ * the records of this activity.
+ */
+function saveGymSession(payload: Row): { data: Row[] | null; error: object | null } {
+  const sets = (payload.sets as Row[]) ?? [];
+  const existing = rowsOf('activities').find((row) => row.id === payload.id);
+  if (existing && existing.user_id !== TEST_USER_ID) {
+    return { data: null, error: { code: '42501', message: 'activity belongs to another user' } };
+  }
+  if (sets.some((set) => set.reps !== null && (set.reps as number) < 1)) {
+    return { data: null, error: { code: '23514', message: 'violates check constraint' } };
+  }
+  if (!existing) {
+    rowsOf('activities').push({
+      id: payload.id,
+      user_id: TEST_USER_ID,
+      type: 'gym',
+      local_date: payload.local_date,
+      timezone: payload.timezone,
+      started_at: payload.started_at,
+      ended_at: payload.ended_at,
+      title: payload.title,
+      // No notes in v1: the column stays empty.
+      notes: null,
+      template_id: payload.template_id,
+      bodyweight_kg: null,
+      deleted_at: null,
+      created_at: SERVER_NOW,
+      updated_at: SERVER_NOW,
+    });
+  }
+  const added = sets.filter((set) => !rowsOf('gym_sets').some((row) => row.id === set.id));
+  for (const set of added) {
+    rowsOf('gym_sets').push({
+      ...set,
+      user_id: TEST_USER_ID,
+      activity_id: payload.id,
+      deleted_at: null,
+      created_at: SERVER_NOW,
+      updated_at: SERVER_NOW,
+    });
+    const exercise = rowsOf('exercises').find((row) => row.id === set.exercise_id);
+    const estimate = estimateOneRepMax({
+      weightKg: set.weight_kg as number | null,
+      reps: set.reps as number | null,
+      isWarmup: set.is_warmup === true,
+      unit: (exercise?.unit as 'reps' | 'seconds') ?? 'reps',
+      tracksLoad: (exercise?.tracks_load as boolean) ?? true,
+      addsBodyweight: (exercise?.adds_bodyweight as boolean) ?? false,
+      bodyweightKg: null,
+    });
+    const best = currentRecords().find((record) => record.exercise_id === set.exercise_id);
+    if (estimate !== null && (!best || estimate > (best.value as number))) {
+      rowsOf('personal_records').push({
+        id: `record-${rowsOf('personal_records').length + 1}`,
+        user_id: TEST_USER_ID,
+        type: 'gym',
+        activity_id: payload.id,
+        gym_set_id: set.id,
+        swim_entry_id: null,
+        exercise_id: set.exercise_id,
+        stroke: null,
+        distance: null,
+        pool_length: null,
+        value: estimate,
+        previous_value: best ? best.value : null,
+        local_date: payload.local_date,
+      });
+    }
+  }
+  return {
+    data: rowsOf('personal_records').filter((record) => record.activity_id === payload.id),
+    error: null,
+  };
+}
+
+// Like Postgres last_performance: per exercise, the work sets of its latest workout.
+function lastPerformance(exerciseIds: string[]): Row[] {
+  const ordered = (row: Row) => ({
+    localDate: row.local_date as string,
+    startedAt: (row.started_at as string | null | undefined) ?? null,
+    id: row.id as string,
+  });
+  const activities = rowsOf('activities')
+    .filter((activity) => activity.user_id === TEST_USER_ID && !activity.deleted_at)
+    .sort((a, b) => compareActivities(ordered(a), ordered(b)));
+  const result: Row[] = [];
+  for (const exerciseId of exerciseIds) {
+    const workSets = (activity: Row) =>
+      rowsOf('gym_sets')
+        .filter(
+          (set) =>
+            set.activity_id === activity.id &&
+            set.exercise_id === exerciseId &&
+            !set.deleted_at &&
+            !set.is_warmup,
+        )
+        .sort(
+          (a, b) =>
+            (a.exercise_position as number) - (b.exercise_position as number) ||
+            (a.set_number as number) - (b.set_number as number),
+        );
+    const latest = activities.find((activity) => workSets(activity).length > 0);
+    if (!latest) continue;
+    workSets(latest).forEach((set, index) =>
+      result.push({
+        exercise_id: exerciseId,
+        activity_id: latest.id,
+        local_date: latest.local_date,
+        work_set_index: index + 1,
+        weight_kg: set.weight_kg ?? null,
+        reps: set.reps ?? null,
+        duration_s: set.duration_s ?? null,
+        difficulty: set.difficulty ?? null,
+      }),
+    );
+  }
+  return result;
 }
 
 type TemplatePayload = {

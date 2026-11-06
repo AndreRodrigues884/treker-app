@@ -7,6 +7,7 @@ import { interpolate } from '@/core/i18n';
 import { useWorkoutsThisWeek } from '@/features/activities/queries';
 import { useAuth } from '@/features/auth/auth-provider';
 import { StartWorkoutButton } from '@/features/navigation/start-workout-button';
+import { InProgressCard } from '@/features/session/in-progress-card';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
 
@@ -27,6 +28,8 @@ export default function TodayScreen() {
         <AppText variant="title" accessibilityRole="header">
           {interpolate(t.today.greeting, { name: profile?.display_name ?? '' })}
         </AppText>
+
+        <InProgressCard />
 
         {progressText !== null && target !== null && (
           <Card>

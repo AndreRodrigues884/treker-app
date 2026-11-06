@@ -1,6 +1,8 @@
 import {
+  formatClock,
   formatDistance,
   formatDuration,
+  formatInputNumber,
   formatLocalDate,
   formatSwimTime,
   formatWeight,
@@ -89,5 +91,25 @@ describe('formatDuration', () => {
     [4500, '1 h 15 min'],
   ])('%i s -> %s', (seconds, text) => {
     expect(formatDuration(seconds).replace(/ /g, ' ')).toBe(text);
+  });
+});
+
+describe('formatClock', () => {
+  it.each([
+    [5, '0:05'],
+    [750, '12:30'],
+    [3723, '1:02:03'],
+    [-3, '0:00'],
+  ])('%i s -> %s', (seconds, text) => {
+    expect(formatClock(seconds)).toBe(text);
+  });
+});
+
+describe('formatInputNumber', () => {
+  it('writes numbers as they are typed in each language', () => {
+    expect(formatInputNumber(97.5, 'en')).toBe('97.5');
+    expect(formatInputNumber(97.5, 'pt')).toBe('97,5');
+    expect(formatInputNumber(1250, 'en')).toBe('1250');
+    expect(formatInputNumber(null, 'pt')).toBe('');
   });
 });

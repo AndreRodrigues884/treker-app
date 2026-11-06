@@ -32,3 +32,12 @@ require('@tanstack/react-query').notifyManager.setScheduler((callback: () => voi
 
 // Drag and drop does not run in Jest; see test-utils/sortables-mock.tsx.
 jest.mock('react-native-sortables', () => require('./test-utils/sortables-mock'));
+
+// Local notifications (the rest timer) and keep-awake are native; see
+// test-utils/notifications-mock.ts.
+jest.mock('expo-notifications', () => require('./test-utils/notifications-mock'));
+jest.mock('expo-keep-awake', () => ({
+  useKeepAwake: jest.fn(),
+  activateKeepAwakeAsync: jest.fn(async () => {}),
+  deactivateKeepAwake: jest.fn(async () => {}),
+}));

@@ -1,13 +1,23 @@
-import { durationSeconds, groupSetsByExercise, gymTotals, nextCursor, swimTotals } from '.';
+import {
+  compareActivities,
+  durationSeconds,
+  groupSetsByExercise,
+  gymTotals,
+  nextCursor,
+  swimTotals,
+} from '.';
 
 describe('nextCursor', () => {
-  const row = (localDate: string, id: string) => ({ localDate, id });
+  const row = (localDate: string, id: string, startedAt: string | null = null) => ({
+    localDate,
+    startedAt,
+    id,
+  });
 
-  it('is the (local_date, id) of the last row of a full page', () => {
-    expect(nextCursor([row('2026-11-05', 'b'), row('2026-11-04', 'a')], 2)).toEqual({
-      localDate: '2026-11-04',
-      id: 'a',
-    });
+  it('is the (local_date, started_at, id) of the last row of a full page', () => {
+    expect(
+      nextCursor([row('2026-11-05', 'b'), row('2026-11-04', 'a', '2026-11-04T08:00:00Z')], 2),
+    ).toEqual({ localDate: '2026-11-04', startedAt: '2026-11-04T08:00:00Z', id: 'a' });
   });
 
   it('is undefined after a short or empty page: there is nothing more', () => {
@@ -70,6 +80,31 @@ describe('groupSetsByExercise', () => {
     expect(groups.map((g) => [g.exerciseId, g.sets.map((s) => s.id)])).toEqual([
       ['bench', ['s1', 's2']],
       ['press', ['s3']],
+    ]);
+  });
+});
+
+describe('compareActivities (the order of list_activity_summaries)', () => {
+  const row = (localDate: string, id: string, startedAt: string | null = null) => ({
+    localDate,
+    startedAt,
+    id,
+  });
+
+  it('newest day first; within a day the latest start first, no start time last, then by id', () => {
+    const rows = [
+      row('2026-10-09', 'z', '2026-10-09T20:00:00Z'),
+      row('2026-10-10', 'a', '2026-10-10T18:00:00Z'),
+      row('2026-10-10', 'c'),
+      row('2026-10-10', 'z', '2026-10-10T07:30:00Z'),
+      row('2026-10-10', 'd'),
+    ];
+    expect([...rows].sort(compareActivities).map((r) => `${r.localDate} ${r.id}`)).toEqual([
+      '2026-10-10 a',
+      '2026-10-10 z',
+      '2026-10-10 d',
+      '2026-10-10 c',
+      '2026-10-09 z',
     ]);
   });
 });
