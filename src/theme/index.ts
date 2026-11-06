@@ -1,3 +1,4 @@
+export { brand } from './brand';
 export { accentTints, colors } from './colors';
 export type { AccentTone, ColorToken } from './colors';
 export { fontAssets, fontFamilies } from './fonts';

@@ -23,7 +23,7 @@ const contentColor: Record<ButtonVariant, ColorToken> = {
   primary: 'onAccent',
   secondary: 'text',
   ghost: 'gym',
-  danger: 'onAccent',
+  danger: 'onDanger',
 };
 
 export function Button({
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[3],
   },
   danger: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.dangerSolid,
   },
   fullWidth: {
     alignSelf: 'stretch',

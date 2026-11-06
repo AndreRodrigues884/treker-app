@@ -1,5 +1,12 @@
 import { Drawer } from 'expo-router/drawer';
-import { CalendarDays, House, Trophy, User, type LucideIcon } from 'lucide-react-native';
+import {
+  CalendarDays,
+  ClipboardList,
+  House,
+  Trophy,
+  User,
+  type LucideIcon,
+} from 'lucide-react-native';
 
 import { Icon } from '@/components';
 import { DrawerContent } from '@/features/navigation/drawer-content';
@@ -37,6 +44,10 @@ export default function DrawerLayout() {
       })}
     >
       <Drawer.Screen name="index" options={{ title: t.nav.today, drawerIcon: drawerIcon(House) }} />
+      <Drawer.Screen
+        name="workouts"
+        options={{ title: t.nav.workouts, drawerIcon: drawerIcon(ClipboardList) }}
+      />
       <Drawer.Screen
         name="calendar"
         options={{ title: t.nav.calendar, drawerIcon: drawerIcon(CalendarDays) }}

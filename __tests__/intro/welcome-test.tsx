@@ -32,8 +32,10 @@ afterEach(() => {
 });
 
 describe('intro', () => {
-  it('shows the first page, the page indicator and Skip', async () => {
+  it('shows the logo, the first page, the page indicator and Skip', async () => {
     await openIntro();
+
+    expect(screen.getByLabelText('Treker')).toBeOnTheScreen();
 
     expect(screen.getByText(en.intro.pages.oneLog.title)).toBeOnTheScreen();
     expect(screen.getByLabelText(page(1))).toBeOnTheScreen();

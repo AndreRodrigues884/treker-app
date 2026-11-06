@@ -16,6 +16,10 @@ export type StepperProps = {
   valueText: string;
   decreaseLabel: string;
   increaseLabel: string;
+  // How much each press changes the value (e.g. 5 for seconds).
+  step?: number;
+  // compact: a smaller number and 44 pt buttons, for several steppers on one screen.
+  size?: 'large' | 'compact';
 };
 
 // A large number with - and + buttons. Screen readers treat it as one adjustable control.
@@ -28,13 +32,16 @@ export function Stepper({
   valueText,
   decreaseLabel,
   increaseLabel,
+  step = 1,
+  size = 'large',
 }: StepperProps) {
-  const decrease = () => onChange(Math.max(min, value - 1));
-  const increase = () => onChange(Math.min(max, value + 1));
+  const decrease = () => onChange(Math.max(min, value - step));
+  const increase = () => onChange(Math.min(max, value + step));
+  const compact = size === 'compact';
 
   return (
     <View
-      style={styles.container}
+      style={[styles.container, compact && styles.containerCompact]}
       accessible
       accessibilityRole="adjustable"
       accessibilityLabel={label}
@@ -44,14 +51,26 @@ export function Stepper({
         event.nativeEvent.actionName === 'increment' ? increase() : decrease()
       }
     >
-      <StepButton icon={Minus} label={decreaseLabel} onPress={decrease} disabled={value <= min} />
+      <StepButton
+        icon={Minus}
+        label={decreaseLabel}
+        onPress={decrease}
+        disabled={value <= min}
+        compact={compact}
+      />
       <View style={styles.value}>
-        <AppText style={styles.number}>{value}</AppText>
+        <AppText style={compact ? styles.numberCompact : styles.number}>{value}</AppText>
         <AppText variant="caption" color="muted">
           {valueText}
         </AppText>
       </View>
-      <StepButton icon={Plus} label={increaseLabel} onPress={increase} disabled={value >= max} />
+      <StepButton
+        icon={Plus}
+        label={increaseLabel}
+        onPress={increase}
+        disabled={value >= max}
+        compact={compact}
+      />
     </View>
   );
 }
@@ -61,11 +80,13 @@ function StepButton({
   label,
   onPress,
   disabled,
+  compact,
 }: {
   icon: typeof Plus;
   label: string;
   onPress: () => void;
   disabled: boolean;
+  compact: boolean;
 }) {
   return (
     <Pressable
@@ -76,11 +97,12 @@ function StepButton({
       accessibilityState={{ disabled }}
       style={({ pressed }) => [
         styles.button,
+        compact && styles.buttonCompact,
         disabled && styles.disabled,
         pressed && styles.pressed,
       ]}
     >
-      <Icon icon={icon} size="lg" />
+      <Icon icon={icon} size={compact ? 'md' : 'lg'} />
     </Pressable>
   );
 }
@@ -92,12 +114,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing[4],
   },
+  containerCompact: {
+    gap: spacing[2],
+  },
   value: {
     flex: 1,
     alignItems: 'center',
   },
   number: {
     ...typography.display,
+    fontFamily: typography.numeric.fontFamily,
+    fontVariant: typography.numeric.fontVariant,
+  },
+  numberCompact: {
+    ...typography.heading,
     fontFamily: typography.numeric.fontFamily,
     fontVariant: typography.numeric.fontVariant,
   },
@@ -110,6 +140,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  buttonCompact: {
+    width: sizes.minTouch,
+    height: sizes.minTouch,
   },
   disabled: {
     opacity: opacity.disabled,

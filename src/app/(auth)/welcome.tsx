@@ -9,7 +9,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 
-import { AppText, Button, Screen } from '@/components';
+import { AppText, Button, Logo, Screen } from '@/components';
 import { interpolate } from '@/core/i18n';
 import {
   LastTimeIllustration,
@@ -20,7 +20,7 @@ import {
 import { useIntro } from '@/features/intro/intro-state';
 import { useI18n } from '@/lib/i18n';
 import { useReducedMotion } from '@/lib/use-reduced-motion';
-import { colors, radii, spacing } from '@/theme';
+import { colors, radii, sizes, spacing } from '@/theme';
 
 type PageKey = 'oneLog' | 'lastTime' | 'records' | 'privacy';
 
@@ -62,6 +62,11 @@ export default function WelcomeScreen() {
   return (
     <Screen>
       <View style={styles.top}>
+        {/* The logo and the name, read once as "Treker". */}
+        <View style={styles.brand} accessible accessibilityLabel="Treker">
+          <Logo size={sizes.minTouch} />
+          <AppText variant="heading">Treker</AppText>
+        </View>
         <Button label={t.intro.skip} variant="ghost" onPress={() => finish('signup')} />
       </View>
 
@@ -141,7 +146,14 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   top: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   page: {
     flex: 1,

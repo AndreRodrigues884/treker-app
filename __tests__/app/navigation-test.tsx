@@ -15,6 +15,7 @@ jest.mock('@/lib/supabase/client', () => require('../../test-utils/supabase-mock
 const nav = en.nav;
 const MAIN_SCREENS = [
   ['/', nav.today],
+  ['/workouts', nav.workouts],
   ['/calendar', nav.calendar],
   ['/records', nav.records],
   ['/profile', nav.profile],
@@ -29,7 +30,7 @@ async function openApp(path = '/', profile = onboardedProfile()) {
 const menuItem = (label: string) => screen.getByRole('button', { name: label });
 
 describe('side menu', () => {
-  it('lists the four screens with the logo, name, weekly goal and version', async () => {
+  it('lists the five screens in order with the logo, name, weekly goal and version', async () => {
     await openApp('/', onboardedProfile({ weekly_target: 4 }));
 
     await fireEvent.press(screen.getByRole('button', { name: nav.openMenu }));
@@ -37,6 +38,10 @@ describe('side menu', () => {
     for (const [, label] of MAIN_SCREENS) {
       expect(menuItem(label)).toBeOnTheScreen();
     }
+    // Today, Workouts, Calendar, Records, Profile.
+    const buttons = screen.getAllByRole('button');
+    const positions = MAIN_SCREENS.map(([, label]) => buttons.indexOf(menuItem(label)));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
     expect(screen.getByRole('header', { name: 'Treker' })).toBeOnTheScreen();
     expect(screen.getByText('Ana')).toBeOnTheScreen();
     // Once on Today, once in the menu.

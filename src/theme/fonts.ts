@@ -1,4 +1,5 @@
 import {
+  Geist_300Light,
   Geist_400Regular,
   Geist_500Medium,
   Geist_600SemiBold,
@@ -12,6 +13,7 @@ import {
 
 // Passed to expo-font's useFonts in the root layout. Keys are the fontFamily names.
 export const fontAssets = {
+  Geist_300Light,
   Geist_400Regular,
   Geist_500Medium,
   Geist_600SemiBold,
@@ -23,6 +25,8 @@ export const fontAssets = {
 
 // Static font files: each weight is its own family, so never rely on fontWeight.
 export const fontFamilies = {
+  // Secondary details next to a title, e.g. "3 exercises".
+  light: 'Geist_300Light',
   regular: 'Geist_400Regular',
   medium: 'Geist_500Medium',
   semiBold: 'Geist_600SemiBold',

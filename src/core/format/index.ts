@@ -1,3 +1,4 @@
+import type { LocalDate } from '../dates';
 import { intlLocale, type Language } from '../i18n';
 
 export type WeightUnit = 'kg' | 'lb';
@@ -53,4 +54,29 @@ export function formatSwimTime(centiseconds: number, language: Language): string
   if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${secondsText}`;
   if (minutes > 0) return `${minutes}:${secondsText}`;
   return secondsText;
+}
+
+/**
+ * A workout's calendar date, short: "Thu, Nov 5" (en) / "qui., 5/11" style per locale. The year
+ * is added when it is not the current one. Formatted in UTC so the date never shifts a day.
+ */
+export function formatLocalDate(date: LocalDate, language: Language, today: LocalDate): string {
+  const sameYear = date.slice(0, 4) === today.slice(0, 4);
+  return new Intl.DateTimeFormat(intlLocale(language), {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+// Up to two initials for the profile picture placeholder: "Ana Silva" -> "AS", "ana" -> "A",
+// "  " -> "". Uses the first and last words.
+export function initialsOf(name: string | null | undefined): string {
+  const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  const first = words[0] ?? '';
+  const last = words.length > 1 ? (words[words.length - 1] ?? '') : '';
+  return (Array.from(first)[0] ?? '').concat(Array.from(last)[0] ?? '').toLocaleUpperCase();
 }

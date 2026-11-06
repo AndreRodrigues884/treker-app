@@ -20,6 +20,9 @@ export const colors = {
   positive: '#34D399',
   // ~7:1 contrast on bg, ~6.5:1 on surface.
   danger: '#F87171',
+  // Fill of destructive buttons, with white text on it (~4.8:1).
+  dangerSolid: '#DC2626',
+  onDanger: '#FFFFFF',
 
   // Translucent accent fills for selected and soft states.
   gymTint: 'rgba(34, 211, 238, 0.14)',
@@ -27,6 +30,9 @@ export const colors = {
   recordTint: 'rgba(251, 191, 36, 0.14)',
   positiveTint: 'rgba(52, 211, 153, 0.14)',
   dangerTint: 'rgba(248, 113, 113, 0.14)',
+
+  // Dims the screen behind a dialog (bg at 80%).
+  scrim: 'rgba(7, 13, 28, 0.8)',
 } as const;
 
 export type ColorToken = keyof typeof colors;

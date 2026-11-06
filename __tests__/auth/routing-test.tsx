@@ -1,9 +1,10 @@
-import { fireEvent, screen } from 'expo-router/testing-library';
+import { fireEvent, screen, waitFor } from 'expo-router/testing-library';
 
 import { en } from '@/core/i18n/en';
 
 import { renderApp, resetStorage } from '../../test-utils/render-app';
 import {
+  goOffline,
   onboardedProfile,
   profileRow,
   resetSupabaseMock,
@@ -28,6 +29,8 @@ describe('route protection', () => {
 
     expect(screen).toHavePathname('/sign-in');
     expect(screen.getByRole('header', { name: en.auth.emailTitle })).toBeOnTheScreen();
+    // The logo, for screen readers too.
+    expect(screen.getByRole('image', { name: 'Treker' })).toBeOnTheScreen();
   });
 
   it('sends a signed-in user without onboarding to the questionnaire', async () => {
@@ -45,6 +48,31 @@ describe('route protection', () => {
 
     expect(screen).toHavePathname('/');
     expect(screen.getByRole('header', { name: 'Hi, Ana' })).toBeOnTheScreen();
+  });
+
+  it('signs out a stored session whose account no longer exists, instead of opening the app', async () => {
+    // A valid token on the phone, but the server has no profile for it (the account was deleted
+    // elsewhere, or the local database was reset).
+    resetSupabaseMock({ signedIn: true, profile: null });
+    await resetStorage({ introSeen: true });
+    await renderApp('/');
+
+    await waitFor(() => expect(screen).toHavePathname('/sign-in'));
+    expect(supabaseMock.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    expect(screen.queryByRole('button', { name: en.nav.openMenu })).not.toBeOnTheScreen();
+  });
+
+  it('can always sign out from Profile, even when the profile could not be loaded', async () => {
+    resetSupabaseMock({ signedIn: true, profile: onboardedProfile() });
+    await resetStorage();
+    goOffline();
+    await renderApp('/profile');
+
+    // Offline the athlete still gets in, and Profile still offers signing out.
+    await fireEvent.press(await screen.findByRole('button', { name: en.profile.signOut }));
+
+    await waitFor(() => expect(screen).toHavePathname('/sign-in'));
+    expect(supabaseMock.auth.signOut).toHaveBeenCalled();
   });
 
   it('signing out opens the email screen, not the intro', async () => {

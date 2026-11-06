@@ -131,11 +131,19 @@ Isto só decide a navegação. **Os dados estão protegidos no Postgres** (RLS),
 - **Renovação do token:** o token é renovado automaticamente só com a app em primeiro plano. O `AppState` para a renovação em segundo plano e retoma-a quando a app volta.
 - **Terminar sessão** apaga a sessão deste telemóvel, mesmo sem rede.
 
-**O perfil é lido do servidor** com o TanStack Query (ver [data-access.md](data-access.md)). Se não carregar (por exemplo, sem rede), o atleta entra na app e o perfil volta a ser pedido quando a rede regressar. Concluir o onboarding e editar o perfil gravam no servidor; se falhar, aparece o erro com "Tentar outra vez" e nada do que foi escrito se perde.
+**O perfil é lido do servidor** com o TanStack Query (ver [data-access.md](data-access.md)). Se não carregar (por exemplo, sem rede), o atleta entra na app e o perfil volta a ser pedido quando a rede regressar. Nesse caso o ecrã Perfil mostra só "Terminar sessão", para haver sempre uma saída.
 
-## Perfil: editar respostas e língua
+**Conta que já não existe:** se o servidor responde que o perfil não existe, a conta desapareceu. Isso acontece quando foi apagada noutro telemóvel, ou quando se faz `npm run db:reset`, que apaga as contas da base local. A app termina então a sessão deste telemóvel e volta ao ecrã do email, em vez de abrir uma app vazia. O perfil é criado pelo Postgres no próprio registo, por isso nunca falta a uma conta que existe.
 
-- No ecrã **Perfil** (no menu lateral), cada resposta do questionário abre a mesma pergunta (`/settings/edit?step=…`), com a mesma validação de [`src/core/onboarding`](../src/core/onboarding/).
+Concluir o onboarding e editar o perfil gravam no servidor; se falhar, aparece o erro com "Tentar outra vez" e nada do que foi escrito se perde.
+
+## Perfil, editar perfil e definições
+
+- **Perfil** (no menu lateral): a foto, o nome e as modalidades, com os botões "Editar perfil" e "Definições". Por baixo vêm os treinos mais recentes (ginásio e natação juntos, os mais recentes primeiro) e, no fim, "Terminar sessão" e "Apagar conta".
+  - Por agora a foto é um círculo com as iniciais do nome (`Avatar`). O carregamento de fotos fica para depois e vai precisar de Supabase Storage com políticas.
+- **Editar perfil** (`/settings/profile`): as respostas do questionário (nome, modalidades, foco no ginásio, natação, piscina habitual, objetivo semanal e peso corporal). Cada uma abre a mesma pergunta (`/settings/edit?step=…`), com a mesma validação de [`src/core/onboarding`](../src/core/onboarding/).
+- **Definições** (`/settings`): unidades, língua, política de privacidade, contacto e a versão da app.
+  - "Unidades" e "Peso corporal" abrem a mesma pergunta, que tem os dois campos.
 - **Acrescentar uma modalidade** faz as perguntas dela antes de gravar. Por exemplo, acrescentar natação pergunta o estilo e a piscina. Assim o perfil cumpre sempre as regras de consistência do Postgres. Retirar uma modalidade apaga as respostas dela.
 - **Língua da app** (`/settings/language`): automática (a do telemóvel), inglês ou português. Fica guardada no telemóvel (`treker.language`) e aplica-se logo.
 - **Ligações de apoio** ("Política de privacidade" e "Contactar"): os endereços estão num só sítio, [`src/lib/links.ts`](../src/lib/links.ts), e **ainda são provisórios**.

@@ -10,6 +10,7 @@ import {
   countActivities,
   getActivityWithEntries,
   listActivities,
+  listRecentActivities,
   type DateRange,
 } from './repository';
 
@@ -33,6 +34,15 @@ export function useActivities(range: DateRange) {
   return useQuery({
     queryKey: queryKeys.activityList(ctx.userId, range),
     queryFn: () => listActivities(ctx, range),
+  });
+}
+
+// The latest workouts, newest first (the profile's list). Refreshed by every training write.
+export function useRecentActivities(limit = 10) {
+  const ctx = useDataContext();
+  return useQuery({
+    queryKey: queryKeys.activityRecent(ctx.userId, limit),
+    queryFn: () => listRecentActivities(ctx, limit),
   });
 }
 

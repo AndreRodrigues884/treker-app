@@ -10,11 +10,19 @@ import CalendarScreen from '@/app/(app)/(drawer)/calendar';
 import TodayScreen from '@/app/(app)/(drawer)/index';
 import ProfileScreen from '@/app/(app)/(drawer)/profile';
 import RecordsScreen from '@/app/(app)/(drawer)/records';
+import WorkoutsScreen from '@/app/(app)/(drawer)/workouts';
 import AppLayout from '@/app/(app)/_layout';
+import EditExerciseScreen from '@/app/(app)/exercises/[id]';
+import ExercisesScreen from '@/app/(app)/exercises/index';
+import NewExerciseScreen from '@/app/(app)/exercises/new';
+import SessionScreen from '@/app/(app)/session';
 import DeleteAccountScreen from '@/app/(app)/settings/delete-account';
 import EditAnswerScreen from '@/app/(app)/settings/edit';
+import SettingsScreen from '@/app/(app)/settings/index';
 import LanguageScreen from '@/app/(app)/settings/language';
+import EditProfileScreen from '@/app/(app)/settings/profile';
 import StartWorkoutScreen from '@/app/(app)/start';
+import TemplateEditorScreen from '@/app/(app)/templates/[id]';
 import AuthLayout from '@/app/(auth)/_layout';
 import SignInScreen from '@/app/(auth)/sign-in';
 import VerifyCodeScreen from '@/app/(auth)/verify';
@@ -78,9 +86,17 @@ export function renderApp(initialUrl = '/') {
       '(app)/(drawer)/index': TodayScreen,
       '(app)/(drawer)/profile': ProfileScreen,
       '(app)/(drawer)/records': RecordsScreen,
+      '(app)/(drawer)/workouts': WorkoutsScreen,
+      '(app)/exercises/[id]': EditExerciseScreen,
+      '(app)/exercises/index': ExercisesScreen,
+      '(app)/exercises/new': NewExerciseScreen,
+      '(app)/session': SessionScreen,
       '(app)/start': StartWorkoutScreen,
+      '(app)/templates/[id]': TemplateEditorScreen,
       '(app)/settings/edit': EditAnswerScreen,
+      '(app)/settings/index': SettingsScreen,
       '(app)/settings/language': LanguageScreen,
+      '(app)/settings/profile': EditProfileScreen,
       '(app)/settings/delete-account': DeleteAccountScreen,
     },
     { initialUrl },

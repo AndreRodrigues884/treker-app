@@ -65,11 +65,13 @@ Duas famílias na mesma tabela:
 | `tracks_load` | Se regista peso. Falso na prancha, por exemplo |
 | `unit` | `reps` (repetições) ou `seconds` (segundos, como a prancha) |
 | `adds_bodyweight` | Se o peso corporal conta como carga (elevações, dips) |
-| `archived` | Escondido das listas, mas mantido no histórico |
+| `archived` | Escondido das listas, mas mantido no histórico (só a biblioteca usa; a app elimina os exercícios próprios com [`delete_custom_exercise`](#eliminar-um-exercício-próprio)) |
 
 ### `workout_templates` e `workout_template_exercises` — treinos guardados
 
-Um treino guardado ("Push A") e a lista ordenada dos seus exercícios (`position`), com séries alvo (`target_sets`), intervalo de repetições alvo (`target_reps_min` a `target_reps_max`, ex.: 8 a 12) ou segundos alvo (`target_seconds`).
+Um treino guardado ("Push A") e a lista ordenada dos seus exercícios (`position`), com séries alvo (`target_sets`), intervalo de repetições alvo (`target_reps_min` a `target_reps_max`, ex.: 8 a 12) ou segundos alvo (`target_seconds`). Por agora a app grava um só alvo de repetições (`min = max`).
+
+A app grava um treino e a sua lista **sempre de uma vez**, com a função [`save_workout_template`](#gravar-um-treino-guardado). Apagar um treino marca `deleted_at` só no treino; as linhas da lista ficam, mas nada as lê sem o treino.
 
 ### `activities` — treinos
 
@@ -178,6 +180,57 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 ### Funções internas
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
+
+### Gravar um treino guardado
+
+`public.save_workout_template(p_template jsonb)`, chamada pela app por `rpc` num só pedido:
+
+```json
+{
+  "id": "uuid do treino",
+  "name": "Push A",
+  "notes": null,
+  "exercises": [
+    { "id": "uuid da linha", "exercise_id": "uuid", "target_sets": 4,
+      "target_reps_min": 5, "target_reps_max": 5, "target_seconds": null, "notes": null }
+  ]
+}
+```
+
+- **Numa só transação**, faz upsert do treino pelo `id` e **substitui a lista**:
+  - as linhas enviadas fazem upsert pelo seu `id`;
+  - a `position` é a ordem no array (0, 1, 2…), não um valor enviado pela app;
+  - as linhas do treino que não vêm na lista ficam marcadas com `deleted_at`, nunca removidas;
+  - uma linha que volta à lista perde o `deleted_at`.
+- **Os ids são gerados no telemóvel**, por isso repetir a mesma chamada ("Tentar outra vez" depois de uma falha de rede) não duplica nada.
+- **Ou grava tudo, ou nada:** um alvo fora dos limites ou um exercício inválido cancelam a chamada inteira, e o nome e a lista anteriores ficam como estavam.
+- É `security invoker`, com `search_path` vazio, e só `authenticated` a pode executar. Corre como o atleta, por isso valem o RLS, as chaves estrangeiras, os `check` e o trigger das referências:
+  - não usa exercícios personalizados de outro utilizador (`23503`);
+  - não escreve no treino nem nas linhas de outro utilizador (o upsert falha na política de update, `42501`);
+  - uma linha do próprio atleta que pertence a outro dos seus treinos é recusada (`22023`), para nunca esvaziar outro treino em silêncio.
+- Testes em `supabase/tests/15_save_workout_template.sql`:
+  - grava um treino novo e substitui a lista;
+  - repetir não duplica;
+  - a ordem e os alvos ficam certos;
+  - uma lista inválida não muda nada;
+  - não usa exercícios próprios de outro utilizador;
+  - não escreve no treino de outro utilizador;
+  - o anónimo não pode chamar a função.
+
+### Eliminar um exercício próprio
+
+`public.delete_custom_exercise(p_exercise_id uuid)`, chamada pela app por `rpc` num só pedido:
+
+- **Numa só transação**, marca `deleted_at` no exercício e nas suas linhas dos treinos guardados (`workout_template_exercises`). Sai da biblioteca e de todos os treinos guardados.
+- **O histórico não muda:** as séries já registadas continuam a apontar para o exercício, por isso os treinos feitos, os recordes e as estatísticas ficam como estavam. A reconstrução dos recordes não olha para o `deleted_at` do exercício.
+- **Repetir não tem efeitos:** um exercício já eliminado é ignorado.
+- É `security invoker`, com `search_path` vazio, e só `authenticated` a pode executar. Um exercício da biblioteca ou de outro utilizador não é encontrado (`no_data_found`).
+- Testes em `supabase/tests/16_delete_custom_exercise.sql`:
+  - elimina o exercício e tira-o do treino guardado, mantendo os outros exercícios;
+  - as séries, os recordes e as estatísticas mantêm-se;
+  - repetir não muda nada;
+  - não elimina exercícios da biblioteca nem de outro utilizador;
+  - o anónimo não pode chamar a função.
 
 ### Apagar uma atividade
 

@@ -6,12 +6,12 @@ import {
 } from 'expo-router/drawer';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Divider, ProgressBar } from '@/components';
+import { AppText, Divider, Logo, ProgressBar } from '@/components';
 import { interpolate } from '@/core/i18n';
 import { useWorkoutsThisWeek } from '@/features/activities/queries';
 import { useAuth } from '@/features/auth/auth-provider';
 import { useI18n } from '@/lib/i18n';
-import { colors, radii, spacing } from '@/theme';
+import { sizes, spacing } from '@/theme';
 
 // The side menu: logo, the athlete's name and weekly goal on top, the screens, and the app
 // version at the bottom.
@@ -26,7 +26,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <Logo />
+        <Brand />
         {profile?.display_name ? <AppText variant="heading">{profile.display_name}</AppText> : null}
         {goal !== null && target !== null && (
           <View style={styles.goal}>
@@ -50,11 +50,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   );
 }
 
-// Text logo until there is a drawn one.
-function Logo() {
+// The logo and the app name, read once as "Treker".
+function Brand() {
   return (
     <View style={styles.logo} accessible accessibilityRole="header" accessibilityLabel="Treker">
-      <View style={styles.logoMark} />
+      <Logo size={sizes.minTouch} />
       <AppText variant="title">Treker</AppText>
     </View>
   );
@@ -78,12 +78,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     marginBottom: spacing[2],
-  },
-  logoMark: {
-    width: spacing[3],
-    height: spacing[3],
-    borderRadius: radii.pill,
-    backgroundColor: colors.gym,
   },
   items: {
     flex: 1,

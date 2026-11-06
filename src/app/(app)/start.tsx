@@ -1,19 +1,23 @@
 import { router } from 'expo-router';
-import { Dumbbell, Waves, X } from 'lucide-react-native';
+import { ClipboardList, Dumbbell, Plus, Waves, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Button, OptionCard, Screen } from '@/components';
+import { AppText, Button, ErrorNotice, OptionCard, Screen } from '@/components';
+import { classifyRequestError } from '@/core/errors';
+import { interpolate } from '@/core/i18n';
 import type { Sport } from '@/core/onboarding';
 import { useAuth } from '@/features/auth/auth-provider';
 import { sportLabel } from '@/features/onboarding/labels';
+import { useTemplates } from '@/features/templates/queries';
 import { useI18n } from '@/lib/i18n';
 import { spacing } from '@/theme';
 
 const sportIcons = { gym: Dumbbell, swim: Waves } as const;
 
-// PROVISIONAL: opened by the "+" tab button. Shows only the sports chosen in onboarding; logging
-// a workout arrives in the next phase.
+// Opened by the "+" button. Shows only the sports chosen in onboarding. Gym lists the saved
+// workouts and "Empty workout"; either opens the session (provisional until phase 1b). Swimming
+// arrives later.
 export default function StartWorkoutScreen() {
   const { t } = useI18n();
   const { profile } = useAuth();
@@ -42,13 +46,65 @@ export default function StartWorkoutScreen() {
             onPress={() => setPicked(sport)}
           />
         ))}
-        {picked !== null && (
+        {picked === 'gym' && <GymWorkouts />}
+        {picked === 'swim' && (
           <AppText color="muted" accessibilityLiveRegion="polite">
             {t.start.comingSoon}
           </AppText>
         )}
       </View>
     </Screen>
+  );
+}
+
+// The saved workouts, then "Empty workout".
+function GymWorkouts() {
+  const { t } = useI18n();
+  const templates = useTemplates();
+
+  // Closes this modal, then opens the session.
+  const open = (params: { template?: string }) => {
+    router.back();
+    router.push({ pathname: '/session', params });
+  };
+
+  return (
+    <View style={styles.header}>
+      <AppText variant="heading" accessibilityRole="header">
+        {t.start.gymTitle}
+      </AppText>
+      {templates.isError && (
+        <ErrorNotice
+          message={t.common.errors[classifyRequestError(templates.error)]}
+          network={classifyRequestError(templates.error) === 'network'}
+          onRetry={() => templates.refetch()}
+          retryLabel={t.common.retry}
+          retrying={templates.isFetching}
+        />
+      )}
+      {templates.isPending && <AppText color="muted">{t.common.loading}</AppText>}
+      {templates.data?.map(({ template, exercises }) => (
+        <OptionCard
+          key={template.id}
+          title={template.name}
+          description={
+            exercises.length === 1
+              ? t.workouts.exerciseCountOne
+              : interpolate(t.workouts.exerciseCount, { count: exercises.length })
+          }
+          icon={ClipboardList}
+          selected={false}
+          onPress={() => open({ template: template.id })}
+        />
+      ))}
+      <OptionCard
+        title={t.session.emptyWorkout}
+        description={t.start.emptyWorkoutHint}
+        icon={Plus}
+        selected={false}
+        onPress={() => open({})}
+      />
+    </View>
   );
 }
 

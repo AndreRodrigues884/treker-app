@@ -48,6 +48,7 @@ const DEFAULTS: Record<string, Row> = {
   gym_sets: { deleted_at: null },
   swim_entries: { deleted_at: null },
   exercises: { slug: null, archived: false, deleted_at: null },
+  workout_templates: { notes: null, deleted_at: null },
 };
 
 const state = {
@@ -86,6 +87,7 @@ class Query {
   private returnRows = false;
   private headCount = false;
   private mode: 'many' | 'single' | 'maybeSingle' = 'many';
+  private maxRows: number | null = null;
 
   constructor(private readonly table: string) {}
 
@@ -135,6 +137,11 @@ class Query {
 
   order(column: string, options: { ascending?: boolean } = {}) {
     this.orders.push({ column, ascending: options.ascending ?? true });
+    return this;
+  }
+
+  limit(count: number) {
+    this.maxRows = count;
     return this;
   }
 
@@ -199,6 +206,7 @@ class Query {
       });
     }
 
+    if (this.maxRows !== null) result = result.slice(0, this.maxRows);
     if (this.headCount) return { data: null, error: null, count: result.length };
     if (this.operation !== 'select' && !this.returnRows) return { data: null, error: null };
 
@@ -225,8 +233,11 @@ export const supabaseMock = {
   // Called on every update to profiles, for assertions.
   updateProfile: jest.fn((_values: Row) => {}),
   // rpc('delete_activity') marks the activity and its children deleted at once (a no-op when
-  // already deleted; P0002 when not the user's). rpc('delete_my_account') removes the user's
-  // rows, like the cascade in Postgres.
+  // already deleted; P0002 when not the user's). rpc('save_workout_template') upserts the
+  // template and replaces its list like the Postgres function (see saveWorkoutTemplate).
+  // rpc('delete_custom_exercise') marks the user's exercise and its template rows deleted (a
+  // no-op when already deleted; P0002 for library or other users' exercises).
+  // rpc('delete_my_account') removes the user's rows, like the cascade in Postgres.
   rpc: jest.fn(async (fn: string, args: Row = {}) => {
     if (state.failure) return { data: null, error: state.failure };
     if (fn === 'delete_activity') {
@@ -244,6 +255,23 @@ export const supabaseMock = {
       }
       activity.deleted_at = SERVER_NOW;
       return { data: null, ...ok };
+    }
+    if (fn === 'delete_custom_exercise') {
+      const exercise = rowsOf('exercises').find(
+        (row) => row.id === args.p_exercise_id && row.owner_id === TEST_USER_ID,
+      );
+      if (!exercise) {
+        return { data: null, error: { code: 'P0002', message: 'custom exercise not found' } };
+      }
+      if (exercise.deleted_at) return { data: null, ...ok };
+      for (const row of rowsOf('workout_template_exercises')) {
+        if (row.exercise_id === exercise.id && !row.deleted_at) row.deleted_at = SERVER_NOW;
+      }
+      exercise.deleted_at = SERVER_NOW;
+      return { data: null, ...ok };
+    }
+    if (fn === 'save_workout_template') {
+      return { data: null, error: saveWorkoutTemplate(args.p_template as TemplatePayload) };
     }
     if (fn === 'delete_my_account') {
       for (const table of Object.keys(state.tables)) {
@@ -275,6 +303,87 @@ export const supabaseMock = {
   },
   from: jest.fn((table: string) => new Query(table)),
 };
+
+type TemplatePayload = {
+  id: string;
+  name: string;
+  notes: string | null;
+  exercises: (Row & { id: string; exercise_id: string })[];
+};
+
+// Like Postgres save_workout_template: upserts the template by id, marks rows left out of the
+// list deleted and upserts the list by row id with position = order in the array. Another
+// user's template (42501) or custom exercise (23503) is refused before anything changes.
+function saveWorkoutTemplate(payload: TemplatePayload): object | null {
+  const templates = rowsOf('workout_templates');
+  const items = rowsOf('workout_template_exercises');
+  const existing = templates.find((row) => row.id === payload.id);
+  if (existing && existing.user_id !== TEST_USER_ID) {
+    return { code: '42501', message: 'new row violates row-level security policy' };
+  }
+  const foreign = payload.exercises.find((item) => {
+    const exercise = rowsOf('exercises').find((row) => row.id === item.exercise_id);
+    return exercise && exercise.owner_id !== null && exercise.owner_id !== TEST_USER_ID;
+  });
+  if (foreign) return { code: '23503', message: 'exercise is not available to this user' };
+
+  if (existing) {
+    Object.assign(existing, { name: payload.name, notes: payload.notes, updated_at: SERVER_NOW });
+  } else {
+    templates.push({
+      ...DEFAULTS.workout_templates,
+      id: payload.id,
+      user_id: TEST_USER_ID,
+      name: payload.name,
+      notes: payload.notes,
+      created_at: SERVER_NOW,
+      updated_at: SERVER_NOW,
+    });
+  }
+  const kept = new Set(payload.exercises.map((item) => item.id));
+  for (const row of items) {
+    if (row.template_id === payload.id && !row.deleted_at && !kept.has(row.id as string)) {
+      row.deleted_at = SERVER_NOW;
+    }
+  }
+  payload.exercises.forEach((item, position) => {
+    const values = { ...item, position, template_id: payload.id, deleted_at: null };
+    const row = items.find((candidate) => candidate.id === item.id);
+    if (row) {
+      Object.assign(row, values, { updated_at: SERVER_NOW });
+    } else {
+      items.push({
+        ...values,
+        user_id: TEST_USER_ID,
+        created_at: SERVER_NOW,
+        updated_at: SERVER_NOW,
+      });
+    }
+  });
+  return null;
+}
+
+// Adds exercises from the shared library (owner_id null) to the mock server.
+export function seedLibraryExercises(
+  exercises: (Partial<Tables<'exercises'>> & { id: string; name_en: string; name_pt: string })[],
+) {
+  for (const exercise of exercises) {
+    rowsOf('exercises').push({
+      owner_id: null,
+      slug: exercise.id,
+      muscle_group: 'chest',
+      equipment: 'barbell',
+      unit: 'reps',
+      tracks_load: true,
+      adds_bodyweight: false,
+      archived: false,
+      deleted_at: null,
+      created_at: SERVER_NOW,
+      updated_at: SERVER_NOW,
+      ...exercise,
+    });
+  }
+}
 
 export const clientModule = {
   supabase: supabaseMock,

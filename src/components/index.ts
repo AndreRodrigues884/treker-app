@@ -1,13 +1,16 @@
 export { AppText, type AppTextProps } from './app-text';
+export { Avatar, type AvatarProps } from './avatar';
 export { Badge, PrBadge, type BadgeProps, type BadgeTone } from './badge';
 export { Button, type ButtonProps, type ButtonVariant } from './button';
 export { Card, type CardProps } from './card';
 export { Chip, type ChipProps, type ChipTone } from './chip';
+export { ConfirmDialog, type ConfirmDialogProps } from './confirm-dialog';
 export { Divider } from './divider';
 export { EmptyState, type EmptyStateProps } from './empty-state';
 export { ErrorNotice, type ErrorNoticeProps } from './error-notice';
 export { Icon, type IconProps, type LucideIcon } from './icon';
 export { ListRow, type ListRowProps } from './list-row';
+export { Logo, type LogoProps } from './logo';
 export { OptionCard, type OptionCardProps, type OptionCardTone } from './option-card';
 export { ProgressBar, type ProgressBarProps } from './progress-bar';
 export { Screen, type ScreenProps } from './screen';

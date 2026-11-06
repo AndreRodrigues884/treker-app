@@ -28,7 +28,8 @@ Fora dos repositórios, só o login (`src/features/auth/api.ts`) fala com o Supa
 | `activities` | Começar, terminar, editar e apagar uma atividade; ler uma atividade com as séries e os tempos; listar e contar atividades por intervalo de datas |
 | `gym` | Acrescentar, editar, apagar e listar séries |
 | `swim` | Acrescentar, editar e apagar tempos de natação |
-| `exercises` | Criar e procurar exercícios personalizados |
+| `exercises` | Listar a biblioteca e os exercícios próprios; criar, editar, eliminar e procurar exercícios próprios |
+| `templates` | Listar e ler treinos guardados com os seus exercícios; gravar um treino e a sua lista num só pedido (`save_workout_template`); apagar |
 | `profile` | Ler e editar o perfil, concluir o onboarding, apagar a conta |
 
 Recebem um `DataContext` (`src/lib/data/context.ts`): o id do atleta, o relógio e o gerador de ids. Nos testes, o relógio e os ids são fixos.
@@ -36,6 +37,8 @@ Recebem um `DataContext` (`src/lib/data/context.ts`): o id do atleta, o relógio
 Regras:
 
 - **Os ids são gerados no telemóvel**, e criar faz `upsert` por id. Repetir um pedido depois de uma falha de rede nunca duplica uma linha, desde que se use o mesmo id. As funções de criação aceitam um `id` opcional para isso; os hooks geram-no **antes** do pedido e "Tentar outra vez" repete-o com o mesmo.
+- **Gravar um treino guardado é um só pedido**, à função Postgres `save_workout_template` ([database.md](database.md#gravar-um-treino-guardado)): o treino e a lista inteira numa transação, com os ids do telemóvel.
+- **Eliminar um exercício próprio é um só pedido**, à função Postgres `delete_custom_exercise` ([database.md](database.md#eliminar-um-exercício-próprio)): sai da biblioteca e dos treinos guardados; os treinos feitos e os recordes mantêm-se. A lista de exercícios inclui os eliminados, para os treinos já registados continuarem a mostrar o nome; a biblioteca esconde-os.
 - **Editar e apagar atualizam por id.** Apagar é marcar `deleted_at`, como no servidor. Apagar uma atividade é **um só pedido**, à função Postgres `delete_activity` ([database.md](database.md#apagar-uma-atividade)). Numa transação, marca a atividade, as séries e os tempos e reconstrói os recordes uma vez por chave; repetir não tem efeitos.
 - **O servidor valida tudo** (RLS, chaves estrangeiras, regras de consistência, `created_at` e `updated_at`); ver [database.md](database.md). Os repositórios não repetem essas regras: as validações para dar feedback rápido estão em `src/core`.
 - **Erros:** o supabase-js responde com `{ data, error }`, e os repositórios transformam isso em valor ou exceção (`src/lib/data/result.ts`).
@@ -54,11 +57,15 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 | `['user', id, 'activities', 'count', início, fim]` | Treinos desta semana ("Hoje" e menu) |
 | `['user', id, 'activities', 'list', início, fim]` | Listas por datas (calendário) |
 | `['user', id, 'activities', 'detail', atividade]` | Uma atividade com as séries e os tempos |
+| `['user', id, 'exercises']` | A biblioteca e os exercícios próprios (frescos 5 min) |
+| `['user', id, 'templates', 'list']` | Os treinos guardados com os seus exercícios |
+| `['user', id, 'templates', 'detail', treino]` | Um treino guardado, no editor |
 
 ### Regras de cache
 
 - **Depois de cada gravação, invalidam-se as consultas afetadas.**
   - Qualquer escrita de treino (atividade, série ou tempo) passa por `useTrainingMutation` e invalida `['user', id, 'activities']`, que inclui listas, contagens e detalhes. Por exemplo, começar uma atividade atualiza o "Hoje".
+  - Criar ou editar um exercício invalida `['user', id, 'exercises']`; eliminá-lo invalida também `['user', id, 'templates']`; gravar ou apagar um treino invalida `['user', id, 'templates']`.
   - Gravar o perfil substitui o perfil em cache pela linha devolvida pelo servidor (`useUpdateProfile`, `useCompleteOnboarding`), por isso a navegação reage logo.
 - **Terminar sessão, apagar a conta ou a sessão expirar limpam a cache toda** (`queryClient.clear()` no `SIGNED_OUT`), para a próxima conta no mesmo telemóvel nunca ver dados da anterior.
 - **Os dados ficam "frescos" 30 s.** Depois disso voltam a ser pedidos quando a app regressa a primeiro plano (`AppState`) ou quando a rede volta (NetInfo), como recomenda a documentação do TanStack Query para React Native.
@@ -71,6 +78,7 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 - **Erros traduzidos:** `classifyRequestError` (`src/core/errors`) separa a falta de rede dos outros erros, e o `ErrorNotice` mostra a mensagem com **"Tentar outra vez"**.
 - **O que o atleta escreveu não se perde:** o formulário mantém o seu estado, e repetir usa os mesmos dados (e o mesmo id).
 - **Onboarding:** o rascunho fica guardado no telemóvel (AsyncStorage) enquanto o atleta responde. Se a gravação final falhar, mostra o erro e deixa tentar outra vez; o rascunho só é apagado depois de gravar.
+- **Treino guardado em edição:** o rascunho vive numa store em memória (`src/features/templates/draft-store.ts`) enquanto o editor está aberto, por isso escolher exercícios noutro ecrã ou uma gravação falhada não perdem nada. "Tentar outra vez" grava o rascunho como está, com os mesmos ids. Sair do editor com alterações por gravar (botão voltar, gesto ou voltar do Android) pergunta primeiro "Descartar alterações?"; sem alterações, sai logo. Fechar a app descarta o que não foi gravado.
 - **Perfil no arranque:** se não carregar, o atleta entra na app e o perfil volta a ser pedido quando a rede regressar.
 
 ## Voltar ao offline
@@ -98,6 +106,18 @@ Antes disso, a Fase 1 guarda o **treino em curso num rascunho no telemóvel** at
 
 - `__tests__/data/repositories-test.ts`: os repositórios contra o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts), uma base em memória). Inclui: repetir uma criação com o mesmo id não duplica; apagar marca `deleted_at` (também em cascata); contagens e listas por datas; erros de rede.
 - `__tests__/app/today-test.tsx`: a contagem semanal do "Hoje", o erro com "Tentar outra vez", e uma gravação de treino a atualizar a contagem.
+- `__tests__/app/workouts-test.tsx`:
+  - pesquisa sem acentos e filtros;
+  - escolha múltipla;
+  - criar um exercício a partir de uma pesquisa vazia;
+  - validação, edição e eliminação do exercício próprio (com o modal de confirmação e o erro de rede);
+  - criar e editar um treino;
+  - reordenar, a arrastar e com os botões;
+  - apagar;
+  - erro de rede com "Tentar outra vez" sem perder o treino;
+  - "+" → Ginásio.
+
+  O arrastar usa uma simulação do `react-native-sortables` ([`test-utils/sortables-mock.tsx`](../test-utils/sortables-mock.tsx)) que chama o `onDragEnd` como a biblioteca; o gesto em si só se testa no telemóvel.
 - `__tests__/app/network-test.tsx`: a faixa "Sem ligação" e a cache limpa ao terminar sessão.
 - `__tests__/app/profile-test.tsx` e `__tests__/onboarding/questionnaire-test.tsx`: as gravações no servidor, e o erro de rede com "Tentar outra vez" sem perder o formulário nem o rascunho.
 

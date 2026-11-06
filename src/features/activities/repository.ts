@@ -139,6 +139,20 @@ export async function listActivities(ctx: DataContext, range: DateRange): Promis
   );
 }
 
+// The athlete's latest workouts (not deleted), newest first, for the profile.
+export async function listRecentActivities(ctx: DataContext, limit = 10): Promise<ActivityRow[]> {
+  return unwrap(
+    await supabase
+      .from('activities')
+      .select('*')
+      .eq('user_id', ctx.userId)
+      .is('deleted_at', null)
+      .order('local_date', { ascending: false })
+      .order('started_at', { ascending: false })
+      .limit(limit),
+  );
+}
+
 export async function countActivities(ctx: DataContext, range: DateRange): Promise<number> {
   const { count, error } = await supabase
     .from('activities')

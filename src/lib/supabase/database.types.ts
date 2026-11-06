@@ -596,7 +596,9 @@ export type Database = {
     };
     Functions: {
       delete_activity: { Args: { p_activity_id: string }; Returns: undefined };
+      delete_custom_exercise: { Args: { p_exercise_id: string }; Returns: undefined };
       delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
+      save_workout_template: { Args: { p_template: Json }; Returns: undefined };
     };
     Enums: {
       activity_type: 'gym' | 'swim';

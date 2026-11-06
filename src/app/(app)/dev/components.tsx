@@ -15,14 +15,17 @@ import { StyleSheet, View } from 'react-native';
 
 import {
   AppText,
+  Avatar,
   Badge,
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   Divider,
   EmptyState,
   Icon,
   ListRow,
+  Logo,
   OptionCard,
   PrBadge,
   ProgressBar,
@@ -74,6 +77,7 @@ function ComponentCatalog() {
   const [option, setOption] = useState('strength');
   const [count, setCount] = useState(3);
   const [loading, setLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const toggleChip = (label: string) =>
     setSelectedChips((current) =>
@@ -205,6 +209,32 @@ function ComponentCatalog() {
             decreaseLabel="Fewer"
             increaseLabel="More"
           />
+          <Stepper
+            size="compact"
+            step={5}
+            value={count * 5}
+            min={5}
+            max={70}
+            onChange={(value) => setCount(value / 5)}
+            label="Target seconds (compact, steps of 5)"
+            valueText={`${count * 5} s`}
+            decreaseLabel="Fewer seconds"
+            increaseLabel="More seconds"
+          />
+        </Section>
+
+        <Section title="ConfirmDialog">
+          <Button label="Delete something" variant="danger" onPress={() => setDialogOpen(true)} />
+          <ConfirmDialog
+            visible={dialogOpen}
+            tone="danger"
+            title='Delete "Landmine press"?'
+            body="It leaves the library and your saved workouts. Workouts you already logged stay."
+            confirmLabel="Delete"
+            cancelLabel="Cancel"
+            onConfirm={() => setDialogOpen(false)}
+            onCancel={() => setDialogOpen(false)}
+          />
         </Section>
 
         <Section title="EmptyState">
@@ -240,6 +270,21 @@ function ComponentCatalog() {
               onPress={() => toggleChip('Swim')}
             />
             <Chip label="Disabled" selected={false} disabled onPress={() => {}} />
+          </View>
+        </Section>
+
+        <Section title="Logo">
+          <View style={styles.row}>
+            <Logo size={sizes.minTouch} />
+            <Logo size={sizes.fab + spacing[4]} />
+            <Logo size={sizes.minTouch * 3} accessibilityLabel="Treker" />
+          </View>
+        </Section>
+
+        <Section title="Avatar">
+          <View style={styles.row}>
+            <Avatar name="Ana Silva" />
+            <Avatar name={null} />
           </View>
         </Section>
 

@@ -80,10 +80,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
+  // The server answered that this user has no profile. Postgres creates it together with the
+  // account, so the account no longer exists (deleted on another phone, or a local database
+  // reset) while this phone still holds a valid token. Sign out instead of opening an empty app.
+  const accountGone = data !== null && profileQuery.isSuccess && profileQuery.data === null;
+  useEffect(() => {
+    if (accountGone) void supabase.auth.signOut({ scope: 'local' });
+  }, [accountGone]);
+
   // A failed profile load (offline) still lets the athlete in; it is fetched again when the
-  // connection comes back.
+  // connection comes back. A missing account keeps loading until the sign-out lands.
   const profileSettled = profileQuery.isSuccess || profileQuery.isError;
-  const isLoading = !sessionLoaded || (userId !== null && !profileSettled);
+  const isLoading = !sessionLoaded || (userId !== null && !profileSettled) || accountGone;
   const profile = userId !== null ? (profileQuery.data ?? null) : null;
 
   const value: AuthState = {

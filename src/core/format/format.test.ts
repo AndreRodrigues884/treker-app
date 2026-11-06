@@ -1,4 +1,4 @@
-import { formatDistance, formatSwimTime, formatWeight } from './index';
+import { formatDistance, formatLocalDate, formatSwimTime, formatWeight, initialsOf } from './index';
 
 const NBSP = ' ';
 
@@ -46,5 +46,30 @@ describe('formatDistance', () => {
 
   it('groups thousands in pt from 10 000 up', () => {
     expect(formatDistance(10000, 'm', 'pt')).toMatch(/^10\s000 m$/);
+  });
+});
+
+describe('formatLocalDate', () => {
+  it('shows weekday, day and month, never shifting the day', () => {
+    expect(formatLocalDate('2026-11-05', 'en', '2026-11-06')).toBe('Thu, Nov 5');
+    // The exact Portuguese form comes from the platform's ICU ("quinta, 5/11" in Node).
+    expect(formatLocalDate('2026-11-05', 'pt', '2026-11-06')).toMatch(/^qui.*5/);
+  });
+
+  it('adds the year when it is not the current one', () => {
+    expect(formatLocalDate('2025-12-31', 'en', '2026-11-06')).toBe('Wed, Dec 31, 2025');
+  });
+});
+
+describe('initialsOf', () => {
+  it.each([
+    ['Ana Silva', 'AS'],
+    ['ana', 'A'],
+    ['  maria   da  costa ', 'MC'],
+    ['Élio', 'É'],
+    ['', ''],
+    [null, ''],
+  ])('%p -> %p', (name, initials) => {
+    expect(initialsOf(name)).toBe(initials);
   });
 });

@@ -29,3 +29,6 @@ jest.mock('@react-native-community/netinfo', () =>
 require('@tanstack/react-query').notifyManager.setScheduler((callback: () => void) => {
   void Promise.resolve().then(callback);
 });
+
+// Drag and drop does not run in Jest; see test-utils/sortables-mock.tsx.
+jest.mock('react-native-sortables', () => require('./test-utils/sortables-mock'));

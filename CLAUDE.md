@@ -20,7 +20,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 ## UI conventions
 
 - Dark mode only in v1. Every color, font, size, spacing and radius comes from `src/theme`; no loose values in components.
-- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`, `OptionCard`, `Stepper`, `EmptyState`, `ListRow`). Review them in the dev-only catalog at `/dev/components`.
+- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`, `OptionCard`, `Stepper`, `EmptyState`, `ListRow`, `Avatar`, `ConfirmDialog`, `ErrorNotice`, `Logo`). Review them in the dev-only catalog at `/dev/components`.
 - Icons: Lucide only (`lucide-react-native`), rendered through `Icon`. Never emoji as icons.
 - Fonts: Geist for text, Geist Mono (`AppText variant="numeric"`) for times, weights and reps.
 - Numbers shown to the user go through `src/core/format` (weights, swim times in centiseconds, distances).
@@ -42,6 +42,7 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 - `src/core/` — pure TypeScript logic (types, Zod schemas, calculations such as 1RM and PRs); no React/React Native imports
 - `src/lib/` — clients and services (Supabase, storage, `src/lib/data`: TanStack Query client, cache keys, data context)
 - `src/theme/` — design tokens: colors, fonts, typography, spacing, radii, sizes
+- `assets/brand/` — the logo (`treker-logo.svg`, the source of truth). The `Logo` component draws it in the app; the app icons, splash image and favicon in `assets/images/` are generated from it with `npm run brand:icons` (`scripts/make-icons.js`). Never edit those PNGs by hand.
 - `supabase/` — migrations and SQL tests
 - `docs/` — documentation
 
@@ -57,6 +58,7 @@ npm run db:start    # local Supabase (needs Docker Desktop)
 npm run db:reset    # re-apply migrations + seed
 npm run db:test     # pgTAP tests in supabase/tests
 npm run db:types    # regenerate src/lib/supabase/database.types.ts
+npm run brand:icons # regenerate the app icons, splash and favicon from assets/brand/treker-logo.svg
 ```
 
 Sign-in, session, route protection, profile settings and account deletion: see [docs/auth.md](docs/auth.md). External links (privacy policy, contact) live only in `src/lib/links.ts`. Screen tests mock the Supabase client with `test-utils/supabase-mock.ts` and render the real routes with `test-utils/render-app.tsx`.

@@ -2,12 +2,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Screen, TextField } from '@/components';
+import { AppText, Button, Logo, Screen, TextField } from '@/components';
 import { validateEmail } from '@/core/auth';
 import { sendEmailCode } from '@/features/auth/api';
 import { useIntro } from '@/features/intro/intro-state';
 import { useI18n } from '@/lib/i18n';
-import { spacing } from '@/theme';
+import { sizes, spacing } from '@/theme';
 
 // One screen for new and returning users (sign-in by code creates the account when needed);
 // "mode" from the intro only changes the title.
@@ -45,6 +45,7 @@ export default function SignInScreen() {
     <Screen scroll>
       <View style={styles.content}>
         <View style={styles.header}>
+          <Logo size={sizes.fab + spacing[4]} accessibilityLabel="Treker" />
           <AppText variant="title" accessibilityRole="header">
             {mode === 'signup' ? t.auth.signUpTitle : t.auth.emailTitle}
           </AppText>

@@ -8,16 +8,30 @@ import {
   listActivities,
   startActivity,
 } from '@/features/activities/repository';
-import { createCustomExercise, findCustomExerciseByName } from '@/features/exercises/repository';
+import {
+  createCustomExercise,
+  deleteCustomExercise,
+  findCustomExerciseByName,
+  listExercises,
+  updateCustomExercise,
+} from '@/features/exercises/repository';
 import { addSet, deleteSet, listSets, updateSet } from '@/features/gym/repository';
 import { completeOnboarding, getProfile, updateProfile } from '@/features/profile/repository';
 import { addSwimEntry, deleteSwimEntry } from '@/features/swim/repository';
+import {
+  deleteTemplate,
+  getTemplate,
+  listTemplates,
+  saveTemplate,
+} from '@/features/templates/repository';
+import { addExercises, emptyTemplate, moveItemBy, removeItem } from '@/core/templates';
 import type { DataContext } from '@/lib/data/context';
 
 import {
   goOffline,
   onboardedProfile,
   resetSupabaseMock,
+  seedLibraryExercises,
   serverRows,
   supabaseMock,
   TEST_USER_ID,
@@ -91,7 +105,9 @@ describe('activities', () => {
 
     // One request: Postgres delete_activity marks the activity and its children together.
     expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('delete_activity', { p_activity_id: activity.id });
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('delete_activity', {
+      p_activity_id: activity.id,
+    });
     expect(supabaseMock.writes).toHaveLength(writesBefore);
     expect(await countActivities(ctx, week)).toBe(0);
     expect(await getActivityWithEntries(ctx, activity.id)).toBeNull();
@@ -99,9 +115,9 @@ describe('activities', () => {
     const storedSet = serverRows<{ id: string; deleted_at: string | null }>('gym_sets').find(
       (row) => row.id === set.id,
     );
-    const storedActivity = serverRows<{ id: string; deleted_at: string | null }>(
-      'activities',
-    ).find((row) => row.id === activity.id);
+    const storedActivity = serverRows<{ id: string; deleted_at: string | null }>('activities').find(
+      (row) => row.id === activity.id,
+    );
     expect(storedSet?.deleted_at).not.toBeNull();
     expect(storedSet?.deleted_at).toBe(storedActivity?.deleted_at);
   });
@@ -221,6 +237,103 @@ describe('exercises and profile', () => {
       timezone: 'Europe/Lisbon',
     });
     expect(done.onboarded_at).toBe('2026-11-04T23:30:00.000Z');
+  });
+});
+
+describe('custom exercises: edit and delete', () => {
+  it('lists the library and own exercises, edits and deletes an own one in one request', async () => {
+    seedLibraryExercises([{ id: 'bench', name_en: 'Bench Press', name_pt: 'Supino' }]);
+    const mine = await createCustomExercise(ctx, {
+      name: 'Zercher squat',
+      muscleGroup: 'quads',
+      equipment: 'barbell',
+    });
+
+    const values = {
+      name: 'Zercher squat (pause)',
+      muscleGroup: 'quads' as const,
+      equipment: 'barbell' as const,
+      unit: 'reps' as const,
+      tracksLoad: true,
+      addsBodyweight: false,
+    };
+    const updated = await updateCustomExercise(ctx, mine.id, values);
+    expect(updated).toMatchObject({
+      name_en: 'Zercher squat (pause)',
+      name_pt: 'Zercher squat (pause)',
+    });
+
+    const writes = supabaseMock.writes.length;
+    await deleteCustomExercise(ctx, mine.id);
+    await deleteCustomExercise(ctx, mine.id);
+
+    expect(supabaseMock.rpc).toHaveBeenCalledWith('delete_custom_exercise', {
+      p_exercise_id: mine.id,
+    });
+    expect(supabaseMock.writes).toHaveLength(writes);
+    // Deleted ones are still listed (logged workouts need their names); the library hides them.
+    const listed = await listExercises(ctx);
+    expect(listed.map((e) => [e.id, e.deleted_at !== null])).toEqual([
+      ['bench', false],
+      [mine.id, true],
+    ]);
+    // A library exercise cannot be deleted.
+    await expect(deleteCustomExercise(ctx, 'bench')).rejects.toMatchObject({ code: 'P0002' });
+  });
+});
+
+describe('saved workouts', () => {
+  function pushDay() {
+    return addExercises(
+      { ...emptyTemplate(ctx.newId()), name: 'Push A' },
+      [
+        { id: 'bench', unit: 'reps' },
+        { id: 'plank', unit: 'seconds' },
+      ],
+      ctx.newId,
+    );
+  }
+
+  it('saves the template and its list in one request, in order', async () => {
+    const draft = pushDay();
+    await saveTemplate(ctx, draft);
+
+    expect(supabaseMock.rpc).toHaveBeenCalledTimes(1);
+    expect(supabaseMock.writes).toHaveLength(0);
+    const read = await getTemplate(ctx, draft.id);
+    expect(read?.template.name).toBe('Push A');
+    expect(read?.exercises.map((e) => [e.exercise_id, e.position])).toEqual([
+      ['bench', 0],
+      ['plank', 1],
+    ]);
+  });
+
+  it('repeating a save (a retry) never duplicates; saving again replaces the list', async () => {
+    const draft = pushDay();
+    await saveTemplate(ctx, draft);
+    await saveTemplate(ctx, draft);
+    expect(serverRows('workout_templates')).toHaveLength(1);
+    expect(serverRows('workout_template_exercises')).toHaveLength(2);
+
+    const reordered = removeItem(moveItemBy(draft, draft.items[1].id, -1), draft.items[0].id);
+    await saveTemplate(ctx, reordered);
+
+    const [listed] = await listTemplates(ctx);
+    expect(listed.exercises.map((e) => e.exercise_id)).toEqual(['plank']);
+    // The removed row is marked, not removed.
+    expect(serverRows('workout_template_exercises')).toHaveLength(2);
+  });
+
+  it('deleting marks deleted_at and hides the template', async () => {
+    const draft = pushDay();
+    await saveTemplate(ctx, draft);
+    await deleteTemplate(ctx, draft.id);
+
+    expect(await listTemplates(ctx)).toEqual([]);
+    expect(await getTemplate(ctx, draft.id)).toBeNull();
+    expect(
+      serverRows<{ deleted_at: string | null }>('workout_templates')[0].deleted_at,
+    ).not.toBeNull();
   });
 });
 

@@ -1,0 +1,24 @@
+<svg viewBox="0 0 400 400" width="400" height="400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="400" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D1F45"/>
+      <stop offset="100%" stop-color="#060C1C"/>
+    </linearGradient>
+    <linearGradient id="chevron" x1="108" y1="288" x2="292" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#A78BFA"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="400" height="400" rx="88" fill="url(#bg)"/>
+  <rect x="1" y="1" width="398" height="398" rx="87" fill="none" stroke="url(#chevron)" stroke-width="1" opacity="0.2"/>
+  <ellipse cx="200" cy="200" rx="130" ry="110" fill="#1D4ED8" opacity="0.10" filter="url(#glow)"/>
+  <path d="M 108 292 L 200 108 L 292 292" stroke="url(#chevron)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+</svg>
