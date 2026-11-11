@@ -399,15 +399,20 @@ function Records({ records, units }: { records: PersonalRecordRow[]; units: Disp
                   })
                 : swimTimeText(record.value, language);
             return (
+              // Two lines: the seal with the name, then the value below.
               <View
                 key={record.id}
-                style={styles.line}
+                style={styles.recordItem}
                 accessible
                 accessibilityLabel={`${t.records.prLabel}: ${what}, ${value}`}
               >
-                <PrBadge />
-                <AppText style={styles.value}>{what}</AppText>
-                <AppText variant="numeric">{value}</AppText>
+                <View style={styles.recordName}>
+                  <PrBadge />
+                  <AppText style={styles.value}>{what}</AppText>
+                </View>
+                <AppText variant="numeric" color="record">
+                  {value}
+                </AppText>
               </View>
             );
           })}
@@ -454,6 +459,17 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing[3],
+  },
+  recordItem: {
+    gap: spacing[1],
+    paddingVertical: spacing[3],
+    borderTopWidth: sizes.border,
+    borderTopColor: colors.divider,
+  },
+  recordName: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   line: {
     minHeight: sizes.minTouch,

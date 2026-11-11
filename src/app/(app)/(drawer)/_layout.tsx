@@ -33,7 +33,7 @@ export default function DrawerLayout() {
         headerStyle: { backgroundColor: colors.bg },
         headerShadowVisible: false,
         headerTintColor: colors.text,
-        headerTitleStyle: { fontFamily: fontFamilies.semiBold },
+        headerTitleStyle: { fontFamily: fontFamilies.medium },
         drawerStyle: { backgroundColor: colors.surface },
         drawerActiveTintColor: colors.gym,
         drawerActiveBackgroundColor: colors[accentTints.gym],

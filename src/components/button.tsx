@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { Icon, type LucideIcon } from '@/components/icon';
-import { colors, fontFamilies, opacity, radii, sizes, spacing, type ColorToken } from '@/theme';
+import { colors, opacity, radii, sizes, spacing, type ColorToken } from '@/theme';
 
 // danger: irreversible actions such as deleting the account.
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -60,7 +60,7 @@ export function Button({
       {/* Content stays laid out while loading so the button keeps its size. */}
       <View style={[styles.content, loading && styles.hidden]}>
         {icon && <Icon icon={icon} color={color} />}
-        <AppText style={styles.label} color={color} numberOfLines={1}>
+        <AppText variant="label" color={color} numberOfLines={1}>
           {label}
         </AppText>
       </View>
@@ -111,8 +111,5 @@ const styles = StyleSheet.create({
   },
   hidden: {
     opacity: 0,
-  },
-  label: {
-    fontFamily: fontFamilies.semiBold,
   },
 });

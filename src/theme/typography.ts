@@ -2,7 +2,8 @@ import type { TextStyle } from 'react-native';
 
 import { fontFamilies } from './fonts';
 
-export type TextVariant = 'display' | 'title' | 'heading' | 'body' | 'caption' | 'numeric';
+export type TextVariant =
+  'display' | 'title' | 'heading' | 'body' | 'label' | 'caption' | 'numeric';
 
 export const typography = {
   display: {
@@ -11,24 +12,30 @@ export const typography = {
     lineHeight: 44,
     letterSpacing: -1,
   },
-  // Screen titles.
+  // Screen titles. Medium, not bold: the size already makes them stand out.
   title: {
-    fontFamily: fontFamilies.semiBold,
-    fontSize: 24,
-    lineHeight: 30,
-    letterSpacing: -0.4,
+    fontFamily: fontFamilies.medium,
+    fontSize: 22,
+    lineHeight: 28,
+    letterSpacing: -0.3,
   },
   // Section titles and card names.
   heading: {
-    fontFamily: fontFamilies.semiBold,
-    fontSize: 18,
-    lineHeight: 24,
-    letterSpacing: -0.2,
+    fontFamily: fontFamilies.medium,
+    fontSize: 17,
+    lineHeight: 22,
+    letterSpacing: -0.1,
   },
   body: {
     fontFamily: fontFamilies.regular,
     fontSize: 16,
     lineHeight: 24,
+  },
+  // Button labels.
+  label: {
+    fontFamily: fontFamilies.medium,
+    fontSize: 15,
+    lineHeight: 20,
   },
   caption: {
     fontFamily: fontFamilies.medium,
