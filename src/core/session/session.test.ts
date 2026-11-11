@@ -13,15 +13,19 @@ import {
   removeExercise,
   reorderExercises,
   restRemainingS,
+  saveEditedSet,
   saveSet,
+  sessionFromWorkout,
   sessionSummary,
   setExercisePlan,
   setOneRepMaxKg,
   setProblem,
   setSessionTitle,
+  setSessionWhen,
   skipRest,
   startSession,
   toSavePayload,
+  toUpdatePayload,
   type ExerciseInfo,
   type GymSession,
   type LastPerformance,
@@ -434,5 +438,124 @@ describe('saving the workout', () => {
     expect(session?.title).toBe('Push A');
     expect(session?.exercises[0]!.targetReps).toBeNull();
     expect(session?.exercises[0]!.sets[0]!.difficulty).toBeNull();
+  });
+});
+
+describe('editing a saved workout', () => {
+  const saved = (overrides: Record<string, unknown> & { id: string }) => ({
+    exercise_id: 'bench',
+    exercise_position: 0,
+    set_number: 1,
+    weight_kg: 100,
+    reps: 5,
+    duration_s: null,
+    difficulty: null,
+    deleted_at: null,
+    ...overrides,
+  });
+
+  const workout = () =>
+    sessionFromWorkout({
+      activity: {
+        id: 'w1',
+        user_id: 'ana',
+        template_id: null,
+        title: 'Push A',
+        local_date: '2026-11-01',
+        timezone: 'Europe/Lisbon',
+        started_at: '2026-11-01T09:00:00.000Z',
+      },
+      sets: [
+        saved({ id: 'p1', exercise_id: 'press', exercise_position: 1, weight_kg: 50, reps: 8 }),
+        saved({ id: 'b2', set_number: 2, weight_kg: 102.06, difficulty: 'hard' }),
+        saved({ id: 'b1', difficulty: 'easy' }),
+        saved({ id: 'gone', set_number: 3, deleted_at: '2026-11-02T10:00:00Z' }),
+      ],
+      exercises,
+      weightUnit: 'lb',
+      bodyweightKg: null,
+      newId: ids('key'),
+    });
+
+  it('loads the workout as a session: exercises in order, sets done, in the athlete unit', () => {
+    const session = workout();
+    expect(session).toMatchObject({
+      id: 'w1',
+      title: 'Push A',
+      localDate: '2026-11-01',
+      startedAt: '2026-11-01T09:00:00.000Z',
+      rest: null,
+    });
+    expect(session.exercises.map((e) => [e.id, e.sets.map((s) => s.id)])).toEqual([
+      ['bench', ['b1', 'b2']],
+      ['press', ['p1']],
+    ]);
+    expect(session.exercises[0]!.sets[1]).toMatchObject({
+      weight: 225,
+      difficulty: 'hard',
+      done: true,
+      pr: false,
+    });
+  });
+
+  it('builds the update: changed, new and removed sets, and the new date and title', () => {
+    let session = workout();
+    const bench = session.exercises[0]!;
+    // Changed: b1 to 230 lb, hard.
+    session = saveEditedSet(session, bench.key, 'b1', {
+      weight: 230,
+      reps: 5,
+      seconds: null,
+      difficulty: 'hard',
+    });
+    // New: a third bench set.
+    session = setExercisePlan(
+      session,
+      bench.key,
+      { setCount: 3, reps: 5, seconds: null },
+      () => 'b3',
+    );
+    session = saveEditedSet(session, bench.key, 'b3', {
+      weight: 200,
+      reps: 8,
+      seconds: null,
+      difficulty: null,
+    });
+    // Removed: the press.
+    session = removeExercise(session, session.exercises[1]!.key);
+    session = setSessionWhen(setSessionTitle(session, 'Push A (heavy)'), {
+      localDate: '2026-11-02',
+      startedAt: '2026-11-02T18:00:00.000Z',
+    });
+
+    const payload = toUpdatePayload(session);
+    expect(payload).not.toHaveProperty('ended_at');
+    expect(payload).toMatchObject({
+      id: 'w1',
+      local_date: '2026-11-02',
+      started_at: '2026-11-02T18:00:00.000Z',
+      title: 'Push A (heavy)',
+    });
+    expect(
+      payload.sets.map((s) => [s.id, s.set_number, s.weight_kg, s.reps, s.difficulty]),
+    ).toEqual([
+      ['b1', 1, 104.33, 5, 'hard'],
+      ['b2', 2, 102.06, 5, 'hard'],
+      ['b3', 3, 90.72, 8, null],
+    ]);
+    // The press is not sent, so Postgres marks its set deleted.
+    expect(payload.sets.map((s) => s.id)).not.toContain('p1');
+  });
+
+  it('a set edited while editing gets no rest timer and no live seal', () => {
+    const session = workout();
+    const edited = saveEditedSet(session, session.exercises[0]!.key, 'b1', {
+      weight: 400,
+      reps: 1,
+      seconds: null,
+      difficulty: null,
+    });
+    expect(edited.rest).toBeNull();
+    expect(edited.exercises[0]!.sets[0]!.pr).toBe(false);
   });
 });

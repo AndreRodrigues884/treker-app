@@ -29,7 +29,8 @@ Fora dos repositórios, só o login (`src/features/auth/api.ts`) fala com o Supa
 | `gym` | Acrescentar, editar, apagar e listar séries |
 | `swim` | Acrescentar, editar e apagar tempos de natação |
 | `exercises` | Listar a biblioteca e os exercícios próprios; criar, editar, eliminar e procurar exercícios próprios |
-| `session` | Gravar uma sessão de ginásio num só pedido (`save_gym_session`); a última vez de cada exercício (`last_performance`); os recordes atuais, para o selo de PR na hora |
+| `session` | Gravar uma sessão de ginásio num só pedido (`save_gym_session`); editar um treino gravado num só pedido (`update_gym_session`); a última vez de cada exercício (`last_performance`); os recordes atuais, para o selo de PR na hora |
+| `records` | Os recordes atuais com a série que os deu (`current_gym_records`); as estatísticas de um exercício (`exercise_stats`); os pontos dos gráficos (`exercise_progress`); o histórico de um exercício por páginas (`exercise_history`) |
 | `templates` | Listar e ler treinos guardados com os seus exercícios; gravar um treino e a sua lista num só pedido (`save_workout_template`); apagar |
 | `profile` | Ler e editar o perfil, concluir o onboarding, apagar a conta |
 
@@ -62,6 +63,8 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 | `['user', id, 'activities', 'detail', atividade, 'records']` | Os recordes desse treino (ecrã de detalhe) |
 | `['user', id, 'activities', 'summaries']` | Os treinos do Perfil com os totais, por páginas (`useInfiniteQuery`) |
 | `['user', id, 'activities', 'last', exercícios]` | A última vez de cada exercício, ao começar uma sessão ou acrescentar exercícios |
+| `['user', id, 'records', 'gym']` | O ecrã de recordes: um recorde por exercício |
+| `['user', id, 'exercise', exercício, …]` | O ecrã de um exercício: `record`, `stats`, `progress` (por intervalo) e `history` (por páginas) |
 | `['user', id, 'records', 'current', 'gym']` | O melhor 1RM atual de cada exercício (selo de PR durante a sessão) |
 | `['user', id, 'exercises']` | A biblioteca e os exercícios próprios (frescos 5 min) |
 | `['user', id, 'templates', 'list']` | Os treinos guardados com os seus exercícios |
@@ -104,6 +107,26 @@ flowchart LR
   - A permissão é pedida no primeiro treino, com uma frase a explicar porquê. Sem permissão, o temporizador no ecrã funciona na mesma.
   - As notificações locais funcionam no Expo Go; só as push precisam de uma build de desenvolvimento.
 
+## Editar e apagar treinos gravados
+
+- **Editar** usa o mesmo ecrã de cartões e a mesma lógica da sessão (`src/core/session`): `sessionFromWorkout` carrega o treino gravado, com todas as séries feitas, e `toUpdatePayload` gera o pedido do `update_gym_session`.
+  - Não há temporizador de descanso nem selo de PR na hora: os recordes oficiais são reconstruídos pelo Postgres ao gravar.
+  - A edição vive numa store só em memória (`src/features/session/edit-store.ts`), separada do treino em curso, e é descartada ao sair do ecrã sem gravar. Ir à biblioteca acrescentar exercícios (`/exercises?pick=gym-edit:<treino>`) não a perde.
+  - A data e a hora de início são escritas pelo atleta. A hora é convertida num instante no fuso do treino (`instantOf` em `src/core/dates`), e a data local fica como foi escrita.
+- **Apagar** usa o `delete_activity`, depois de uma confirmação.
+- **O que se refresca:** gravar, editar ou apagar um treino chama `invalidateWorkoutChange` (`src/features/records/queries.ts`). Invalida:
+  - as atividades (o detalhe, os treinos recentes do Perfil e a contagem do "Hoje");
+  - os recordes;
+  - os ecrãs dos exercícios afetados, antes e depois da edição.
+
+## Gráficos
+
+`TrendChart` (`src/components`) desenha linhas e barras com o `react-native-gifted-charts`. Essa biblioteca desenha com o `react-native-svg` e usa o `expo-linear-gradient`, ambos incluídos no Expo Go do SDK 58. O `victory-native` ficou de fora porque precisa do Skia 2.15.1 ou mais recente, e o Expo Go do SDK 58 traz o 2.14.0.
+
+- Usa as cores do tema e os números em Geist Mono. Os pontos que foram recordes ficam na cor dos recordes.
+- Para o leitor de ecrã, o desenho fica escondido e é lido um resumo ("1RM estimado subiu de 100 kg para 116,7 kg, nos últimos 3 meses."), feito a partir de `describeTrend` em `src/core/progress`.
+- Os pontos vêm prontos do Postgres (`exercise_progress`). Os intervalos 3 meses, 1 ano e tudo são calculados por `rangeStart` em `src/core/progress`.
+
 ## Sem rede
 
 - **Faixa "Sem ligação":** aparece no topo enquanto o NetInfo diz que não há rede (`src/features/network/offline-banner.tsx`). É discreta, não bloqueia toques e é anunciada pelo leitor de ecrã.
@@ -138,6 +161,12 @@ Antes disso, a Fase 1 guarda o **treino em curso num rascunho no telemóvel** at
 
 - `__tests__/data/repositories-test.ts`: os repositórios contra o Supabase simulado ([`test-utils/supabase-mock.ts`](../test-utils/supabase-mock.ts), uma base em memória). Inclui: repetir uma criação com o mesmo id não duplica; apagar marca `deleted_at` (também em cascata); contagens e listas por datas; erros de rede.
 - `__tests__/app/today-test.tsx`: a contagem semanal do "Hoje", o erro com "Tentar outra vez", e uma gravação de treino a atualizar a contagem.
+- `__tests__/app/progress-test.tsx`:
+  - o ecrã de recordes, com pesquisa e o destaque da última semana;
+  - editar uma série e ver o recorde mudar;
+  - mudar a data e a hora;
+  - apagar um treino, que sai do Perfil e do "Hoje";
+  - o ecrã do exercício, com os gráficos resumidos e o histórico por páginas.
 - `__tests__/app/session-test.tsx`:
   - o fluxo completo, do "+" até ao treino aparecer no Perfil (última vez, PR na hora, descanso e notificação, resumo, gravar, recordes oficiais);
   - a permissão das notificações;

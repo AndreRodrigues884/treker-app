@@ -1,9 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
-import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ArrowLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppText, Badge, Button, Card, ErrorNotice, PrBadge, Screen } from '@/components';
+import {
+  AppText,
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  ErrorNotice,
+  Icon,
+  PrBadge,
+  Screen,
+} from '@/components';
 import {
   durationSeconds,
   groupSetsByExercise,
@@ -35,15 +45,16 @@ import type {
 import { useAuth } from '@/features/auth/auth-provider';
 import { useExercises } from '@/features/exercises/queries';
 import { difficultyLabel, difficultyTone } from '@/features/session/difficulty';
+import { useDeleteWorkout } from '@/features/session/queries';
 import { sportLabel } from '@/features/onboarding/labels';
 import { getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
-import { colors, sizes, spacing } from '@/theme';
+import { colors, opacity, sizes, spacing } from '@/theme';
 
 /**
- * One workout, read only: its date, duration and totals, the exercises with their sets (or the
+ * One workout: its date, duration and totals, the exercises with their sets (or the
  * swim times), and the records it set, marked next to the set or time that beat the previous best.
- * Editing and deleting arrive in phase 1c.
+ * A gym workout can be edited (activities/edit/[id]) or deleted, after a confirmation.
  */
 export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -107,6 +118,21 @@ function WorkoutDetail({
   };
   const type: ActivityType = activity.type;
   const today = localDateOf(new Date(), getDeviceTimezone());
+  const remove = useDeleteWorkout();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const exerciseIds = [...new Set(gymSets.map((set) => set.exercise_id))];
+  const deleteWorkout = () =>
+    remove.mutate(
+      { activityId: activity.id, exerciseIds },
+      {
+        // Deleted: back to where the workout was opened (the Profile), with the list updated.
+        onSuccess: () => {
+          setConfirmDelete(false);
+          router.back();
+        },
+        onError: () => setConfirmDelete(false),
+      },
+    );
   const duration = durationSeconds(activity.started_at, activity.ended_at);
   const totals =
     type === 'gym'
@@ -124,6 +150,45 @@ function WorkoutDetail({
           {`${sportLabel(t, type)} · ${formatLocalDate(activity.local_date, language, today)}`}
         </AppText>
       </View>
+
+      {type === 'gym' && (
+        <View style={styles.actions}>
+          <Button
+            label={t.workout.edit}
+            icon={Pencil}
+            variant="secondary"
+            onPress={() =>
+              router.push({ pathname: '/activities/edit/[id]', params: { id: activity.id } })
+            }
+          />
+          <Button
+            label={t.workout.delete}
+            icon={Trash2}
+            variant="danger"
+            onPress={() => setConfirmDelete(true)}
+          />
+        </View>
+      )}
+      {remove.error && (
+        <ErrorNotice
+          message={t.workout.deleteErrors[classifyRequestError(remove.error)]}
+          network={classifyRequestError(remove.error) === 'network'}
+          onRetry={deleteWorkout}
+          retryLabel={t.common.retry}
+          retrying={remove.isPending}
+        />
+      )}
+      <ConfirmDialog
+        visible={confirmDelete}
+        tone="danger"
+        title={t.workout.deleteTitle}
+        body={t.workout.deleteBody}
+        confirmLabel={t.workout.deleteConfirm}
+        cancelLabel={t.common.cancel}
+        loading={remove.isPending}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={deleteWorkout}
+      />
 
       <Card>
         <View style={styles.stats}>
@@ -190,9 +255,24 @@ function GymSets({
         const exercise = byId.get(group.exerciseId);
         return (
           <Card key={group.position}>
-            <AppText variant="heading">
-              {exercise ? exerciseName(exercise, language) : t.templateEditor.unknownExercise}
-            </AppText>
+            {/* The exercise's name opens its progress screen. */}
+            <Pressable
+              onPress={() =>
+                router.push({ pathname: '/exercise/[id]', params: { id: group.exerciseId } })
+              }
+              accessibilityRole="button"
+              accessibilityLabel={interpolate(t.exercise.open, {
+                name: exercise
+                  ? exerciseName(exercise, language)
+                  : t.templateEditor.unknownExercise,
+              })}
+              style={({ pressed }) => [styles.exerciseName, pressed && styles.pressed]}
+            >
+              <AppText variant="heading" style={styles.flex}>
+                {exercise ? exerciseName(exercise, language) : t.templateEditor.unknownExercise}
+              </AppText>
+              <Icon icon={ChevronRight} size="sm" color="dim" />
+            </Pressable>
             {group.sets.map((set) => (
               <View
                 key={set.id}
@@ -338,6 +418,23 @@ function Records({ records, units }: { records: PersonalRecordRow[]; units: Disp
 }
 
 const styles = StyleSheet.create({
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[3],
+  },
+  exerciseName: {
+    minHeight: sizes.minTouch,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  flex: {
+    flex: 1,
+  },
+  pressed: {
+    opacity: opacity.pressed,
+  },
   content: {
     gap: spacing[5],
   },

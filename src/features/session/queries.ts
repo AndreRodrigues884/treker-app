@@ -6,15 +6,17 @@ import {
   moveExercise,
   removeExercise,
   reorderExercises,
+  saveEditedSet,
   saveSet,
   setExercisePlan,
   setSessionTitle,
+  setSessionWhen,
   skipRest,
   startSession,
-  type ExerciseInfo,
   type GymSession,
   type SaveSessionPayload,
   type SetValues,
+  type UpdateSessionPayload,
 } from '@/core/session';
 import { useAuth, useDataContext } from '@/features/auth/auth-provider';
 import { listExercises, type ExerciseRow } from '@/features/exercises/repository';
@@ -23,18 +25,26 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 
-import { getCurrentGymRecords, getLastPerformance, saveGymSession } from './repository';
+import { deleteActivity } from '@/features/activities/repository';
+import { invalidateWorkoutChange } from '@/features/records/queries';
+
+import {
+  discardEditSession,
+  getEditSession,
+  setEditSession,
+  updateEditSession,
+} from './edit-store';
+import { exerciseInfo } from './exercise-info';
+import {
+  getCurrentGymRecords,
+  getLastPerformance,
+  saveGymSession,
+  updateGymSession,
+} from './repository';
 import { cancelRestEnd, scheduleRestEnd } from './rest-notifications';
 import { getActiveSession, setActiveSession, updateActiveSession } from './session-store';
 
-export function exerciseInfo(row: ExerciseRow): ExerciseInfo {
-  return {
-    id: row.id,
-    unit: row.unit,
-    tracksLoad: row.tracks_load,
-    addsBodyweight: row.adds_bodyweight,
-  };
-}
+export { exerciseInfo };
 
 // The best estimated 1RM per exercise, for the live PR seal.
 export function useCurrentGymRecords() {
@@ -170,13 +180,89 @@ export function useSaveGymSession() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: SaveSessionPayload) => saveGymSession(ctx, payload),
-    onSuccess: async () => {
+    onSuccess: async (_records, payload) => {
       await cancelRestEnd(getActiveSession(ctx.userId)?.restNotificationId ?? null);
       await setActiveSession(ctx.userId, null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.activities(ctx.userId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.records(ctx.userId) }),
+      await invalidateWorkoutChange(
+        queryClient,
+        ctx.userId,
+        payload.sets.map((set) => set.exercise_id),
+      );
+    },
+  });
+}
+
+// Editing a saved workout --------------------------------------------------------------------------
+
+/**
+ * Opens a saved workout for editing: loads it into the edit store as a session (every set done, no
+ * rest timer). Does nothing when it is already open, so going to the library and back keeps the
+ * changes.
+ */
+export function startEditing(session: GymSession): void {
+  if (!getEditSession(session.id)) setEditSession(session.id, session);
+}
+
+/**
+ * What the edit screen does to the workout: the same as the session screen (plan, sets, exercises,
+ * order, title), plus the date and start time, without the rest timer or the live PR seal.
+ */
+export function useEditActions(activityId: string) {
+  const ctx = useDataContext();
+  const change = (fn: (session: GymSession) => GymSession) => {
+    updateEditSession(activityId, fn);
+    return Promise.resolve();
+  };
+  return {
+    setPlan: (
+      key: string,
+      plan: { setCount: number; reps: number | null; seconds: number | null },
+    ) => change((session) => setExercisePlan(session, key, plan, ctx.newId)),
+    removeExercise: (key: string) => change((session) => removeExercise(session, key)),
+    moveExercise: (key: string, offset: -1 | 1) =>
+      change((session) => moveExercise(session, key, offset)),
+    reorderExercises: (keys: readonly string[]) =>
+      change((session) => reorderExercises(session, keys)),
+    saveSet: (key: string, setId: string, values: SetValues) =>
+      change((session) => saveEditedSet(session, key, setId, values)),
+    setTitle: (title: string) => change((session) => setSessionTitle(session, title)),
+    setWhen: (when: { localDate: string; startedAt: string }) =>
+      change((session) => setSessionWhen(session, when)),
+    discard: () => discardEditSession(activityId),
+  };
+}
+
+/**
+ * Saves the edited workout in one request (update_gym_session). On success the edit is closed and
+ * everything it touched is refreshed: the workout, the lists, the records, and the screens of the
+ * exercises before and after (an exercise taken out changes too). On failure the edit stays.
+ */
+export function useUpdateGymSession(previousExerciseIds: readonly string[]) {
+  const ctx = useDataContext();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpdateSessionPayload) => updateGymSession(ctx, payload),
+    onSuccess: async (_records, payload) => {
+      discardEditSession(payload.id);
+      await invalidateWorkoutChange(queryClient, ctx.userId, [
+        ...previousExerciseIds,
+        ...payload.sets.map((set) => set.exercise_id),
       ]);
     },
+  });
+}
+
+/**
+ * Deletes a saved workout (delete_activity: the workout and its sets in one transaction, records
+ * rebuilt once). `exerciseIds` are its exercises, whose screens change.
+ */
+export function useDeleteWorkout() {
+  const ctx = useDataContext();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ activityId }: { activityId: string; exerciseIds: readonly string[] }) =>
+      deleteActivity(ctx, activityId),
+    onSuccess: (_result, { exerciseIds }) =>
+      invalidateWorkoutChange(queryClient, ctx.userId, exerciseIds),
   });
 }

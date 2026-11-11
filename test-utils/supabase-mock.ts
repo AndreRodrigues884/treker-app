@@ -259,8 +259,24 @@ export const supabaseMock = {
         }
       }
       activity.deleted_at = SERVER_NOW;
+      // Records rebuilt without this workout's sets.
+      const touched = rowsOf('gym_sets')
+        .filter((row) => row.activity_id === activity.id)
+        .map((row) => row.exercise_id as string);
+      for (const exerciseId of new Set(touched)) rebuildGymRecords(exerciseId);
       return { data: null, ...ok };
     }
+    if (fn === 'update_gym_session') return updateGymSession(args.p_session as Row);
+    if (fn === 'current_gym_records') {
+      return { data: currentGymRecords(args.p_exercise_id as string | undefined), error: null };
+    }
+    if (fn === 'exercise_progress') {
+      return {
+        data: exerciseProgress(args.p_exercise_id as string, args.p_from as string | undefined),
+        error: null,
+      };
+    }
+    if (fn === 'exercise_history') return { data: exerciseHistory(args), error: null };
     if (fn === 'delete_custom_exercise') {
       const exercise = rowsOf('exercises').find(
         (row) => row.id === args.p_exercise_id && row.owner_id === TEST_USER_ID,
@@ -437,39 +453,260 @@ function saveGymSession(payload: Row): { data: Row[] | null; error: object | nul
       created_at: SERVER_NOW,
       updated_at: SERVER_NOW,
     });
-    const exercise = rowsOf('exercises').find((row) => row.id === set.exercise_id);
-    const estimate = estimateOneRepMax({
-      weightKg: set.weight_kg as number | null,
-      reps: set.reps as number | null,
-      isWarmup: set.is_warmup === true,
-      unit: (exercise?.unit as 'reps' | 'seconds') ?? 'reps',
-      tracksLoad: (exercise?.tracks_load as boolean) ?? true,
-      addsBodyweight: (exercise?.adds_bodyweight as boolean) ?? false,
-      bodyweightKg: null,
-    });
-    const best = currentRecords().find((record) => record.exercise_id === set.exercise_id);
-    if (estimate !== null && (!best || estimate > (best.value as number))) {
-      rowsOf('personal_records').push({
-        id: `record-${rowsOf('personal_records').length + 1}`,
-        user_id: TEST_USER_ID,
-        type: 'gym',
-        activity_id: payload.id,
-        gym_set_id: set.id,
-        swim_entry_id: null,
-        exercise_id: set.exercise_id,
-        stroke: null,
-        distance: null,
-        pool_length: null,
-        value: estimate,
-        previous_value: best ? best.value : null,
-        local_date: payload.local_date,
-      });
-    }
+  }
+  for (const exerciseId of new Set(added.map((set) => set.exercise_id as string))) {
+    rebuildGymRecords(exerciseId);
   }
   return {
     data: rowsOf('personal_records').filter((record) => record.activity_id === payload.id),
     error: null,
   };
+}
+
+// The order Postgres rebuilds a key in: date, start time, then position in the workout.
+function setsInHistoryOrder(exerciseId: string, options: { workOnly: boolean }) {
+  const activities = new Map(rowsOf('activities').map((row) => [row.id as string, row]));
+  return rowsOf('gym_sets')
+    .filter((set) => {
+      const activity = activities.get(set.activity_id as string);
+      return (
+        set.user_id === TEST_USER_ID &&
+        set.exercise_id === exerciseId &&
+        !set.deleted_at &&
+        !(options.workOnly && set.is_warmup) &&
+        activity !== undefined &&
+        !activity.deleted_at
+      );
+    })
+    .map((set) => ({ set, activity: activities.get(set.activity_id as string) as Row }))
+    .sort((a, b) => {
+      const date = String(a.activity.local_date).localeCompare(String(b.activity.local_date));
+      if (date !== 0) return date;
+      const aStart = (a.activity.started_at as string | null | undefined) ?? '9999';
+      const bStart = (b.activity.started_at as string | null | undefined) ?? '9999';
+      return (
+        aStart.localeCompare(bStart) ||
+        String(a.activity.id).localeCompare(String(b.activity.id)) ||
+        (a.set.exercise_position as number) - (b.set.exercise_position as number) ||
+        (a.set.set_number as number) - (b.set.set_number as number)
+      );
+    });
+}
+
+function estimateOf(set: Row, activity: Row): number | null {
+  const exercise = rowsOf('exercises').find((row) => row.id === set.exercise_id);
+  return estimateOneRepMax({
+    weightKg: (set.weight_kg as number | null) ?? null,
+    reps: (set.reps as number | null) ?? null,
+    isWarmup: set.is_warmup === true,
+    unit: (exercise?.unit as 'reps' | 'seconds') ?? 'reps',
+    tracksLoad: (exercise?.tracks_load as boolean) ?? true,
+    addsBodyweight: (exercise?.adds_bodyweight as boolean) ?? false,
+    bodyweightKg: (activity.bodyweight_kg as number | null) ?? null,
+  });
+}
+
+function volumeOf(set: Row): number {
+  return Math.max((set.weight_kg as number | null) ?? 0, 0) * ((set.reps as number | null) ?? 0);
+}
+
+// Like private.rebuild_gym_key: the records and stats of one exercise, from its whole history.
+function rebuildGymRecords(exerciseId: string) {
+  state.tables.personal_records = rowsOf('personal_records').filter(
+    (record) => !(record.type === 'gym' && record.exercise_id === exerciseId),
+  );
+  let best: number | null = null;
+  let sequence = 0;
+  const history = setsInHistoryOrder(exerciseId, { workOnly: false });
+  for (const { set, activity } of history) {
+    const estimate = estimateOf(set, activity);
+    if (estimate !== null && (best === null || estimate > best)) {
+      sequence += 1;
+      rowsOf('personal_records').push({
+        id: `record-${exerciseId}-${sequence}`,
+        user_id: TEST_USER_ID,
+        type: 'gym',
+        activity_id: activity.id,
+        gym_set_id: set.id,
+        swim_entry_id: null,
+        exercise_id: exerciseId,
+        stroke: null,
+        distance: null,
+        pool_length: null,
+        value: estimate,
+        previous_value: best,
+        sequence,
+        local_date: activity.local_date,
+      });
+      best = estimate;
+    }
+  }
+  state.tables.exercise_stats = rowsOf('exercise_stats').filter(
+    (row) => row.exercise_id !== exerciseId,
+  );
+  const work = history.filter(({ set }) => !set.is_warmup);
+  const last = history[history.length - 1];
+  if (last) {
+    rowsOf('exercise_stats').push({
+      user_id: TEST_USER_ID,
+      exercise_id: exerciseId,
+      best_one_rep_max_kg: best,
+      total_volume_kg: work.reduce((total, { set }) => total + volumeOf(set), 0),
+      set_count: work.length,
+      last_local_date: last.activity.local_date,
+    });
+  }
+}
+
+// Like Postgres update_gym_session: the caller's own gym workout, its sets replaced, the records of
+// the exercises before and after rebuilt, its records returned.
+function updateGymSession(payload: Row): { data: Row[] | null; error: object | null } {
+  const activity = rowsOf('activities').find(
+    (row) =>
+      row.id === payload.id &&
+      row.user_id === TEST_USER_ID &&
+      row.type === 'gym' &&
+      !row.deleted_at,
+  );
+  if (!activity) return { data: null, error: { code: 'P0002', message: 'gym workout not found' } };
+  const sets = (payload.sets as Row[]) ?? [];
+  const before = rowsOf('gym_sets')
+    .filter((row) => row.activity_id === activity.id && !row.deleted_at)
+    .map((row) => row.exercise_id as string);
+
+  Object.assign(activity, {
+    title: (payload.title as string | null) ?? null,
+    local_date: payload.local_date ?? activity.local_date,
+    started_at: payload.started_at ?? activity.started_at,
+    updated_at: SERVER_NOW,
+  });
+  for (const set of sets) {
+    const row = rowsOf('gym_sets').find((candidate) => candidate.id === set.id);
+    if (row) {
+      if (row.activity_id === activity.id) Object.assign(row, set, { deleted_at: null });
+    } else {
+      rowsOf('gym_sets').push({
+        ...set,
+        user_id: TEST_USER_ID,
+        activity_id: activity.id,
+        deleted_at: null,
+        created_at: SERVER_NOW,
+        updated_at: SERVER_NOW,
+      });
+    }
+  }
+  const kept = new Set(sets.map((set) => set.id));
+  for (const row of rowsOf('gym_sets')) {
+    if (row.activity_id === activity.id && !row.deleted_at && !kept.has(row.id)) {
+      row.deleted_at = SERVER_NOW;
+    }
+  }
+  for (const exerciseId of new Set([...before, ...sets.map((set) => set.exercise_id as string)])) {
+    rebuildGymRecords(exerciseId);
+  }
+  return {
+    data: rowsOf('personal_records').filter((record) => record.activity_id === activity.id),
+    error: null,
+  };
+}
+
+// Like Postgres current_gym_records: the current record per exercise, with its set.
+function currentGymRecords(exerciseId?: string): Row[] {
+  return currentRecords()
+    .filter((record) => !exerciseId || record.exercise_id === exerciseId)
+    .map((record) => {
+      const set = rowsOf('gym_sets').find((row) => row.id === record.gym_set_id);
+      return {
+        exercise_id: record.exercise_id,
+        value: record.value,
+        previous_value: record.previous_value ?? null,
+        local_date: record.local_date,
+        activity_id: record.activity_id,
+        gym_set_id: record.gym_set_id,
+        weight_kg: set?.weight_kg ?? null,
+        reps: set?.reps ?? null,
+      };
+    })
+    .sort((a, b) => String(b.local_date).localeCompare(String(a.local_date)));
+}
+
+// Like Postgres exercise_progress: one point per workout, oldest first.
+function exerciseProgress(exerciseId: string, from?: string): Row[] {
+  const points = new Map<string, Row>();
+  for (const { set, activity } of setsInHistoryOrder(exerciseId, { workOnly: true })) {
+    if (from && String(activity.local_date) < from) continue;
+    const point = points.get(activity.id as string) ?? {
+      activity_id: activity.id,
+      local_date: activity.local_date,
+      started_at: activity.started_at ?? null,
+      best_one_rep_max_kg: null,
+      volume_kg: 0,
+      set_count: 0,
+      is_record: rowsOf('personal_records').some(
+        (record) => record.activity_id === activity.id && record.exercise_id === exerciseId,
+      ),
+    };
+    const estimate = estimateOf(set, activity);
+    const bestSoFar = point.best_one_rep_max_kg as number | null;
+    if (estimate !== null && (bestSoFar === null || estimate > bestSoFar)) {
+      point.best_one_rep_max_kg = estimate;
+    }
+    point.volume_kg = (point.volume_kg as number) + volumeOf(set);
+    point.set_count = (point.set_count as number) + 1;
+    points.set(activity.id as string, point);
+  }
+  return [...points.values()];
+}
+
+// Like Postgres exercise_history: the workouts with this exercise, newest first, by cursor.
+function exerciseHistory(args: Row): Row[] {
+  const exerciseId = args.p_exercise_id as string;
+  const limit = Math.min(Math.max(Number(args.p_limit ?? 20), 1), 50);
+  const before =
+    args.p_before_date === undefined
+      ? null
+      : {
+          localDate: args.p_before_date as string,
+          startedAt: (args.p_before_started_at as string | undefined) ?? null,
+          id: args.p_before_id as string,
+        };
+  const ordered = (row: Row) => ({
+    localDate: row.local_date as string,
+    startedAt: (row.started_at as string | null | undefined) ?? null,
+    id: row.id as string,
+  });
+  const setsOf = (activityId: unknown) =>
+    rowsOf('gym_sets')
+      .filter(
+        (set) =>
+          set.activity_id === activityId && set.exercise_id === exerciseId && !set.deleted_at,
+      )
+      .sort(
+        (a, b) =>
+          (a.exercise_position as number) - (b.exercise_position as number) ||
+          (a.set_number as number) - (b.set_number as number),
+      );
+  return rowsOf('activities')
+    .filter((activity) => activity.user_id === TEST_USER_ID && !activity.deleted_at)
+    .filter((activity) => setsOf(activity.id).length > 0)
+    .filter((activity) => !before || compareActivities(ordered(activity), before) > 0)
+    .sort((a, b) => compareActivities(ordered(a), ordered(b)))
+    .slice(0, limit)
+    .map((activity) => ({
+      activity_id: activity.id,
+      title: activity.title ?? null,
+      local_date: activity.local_date,
+      started_at: activity.started_at ?? null,
+      sets: setsOf(activity.id).map((set) => ({
+        id: set.id,
+        set_number: set.set_number,
+        weight_kg: set.weight_kg ?? null,
+        reps: set.reps ?? null,
+        duration_s: set.duration_s ?? null,
+        difficulty: set.difficulty ?? null,
+        is_warmup: set.is_warmup ?? false,
+      })),
+    }));
 }
 
 // Like Postgres last_performance: per exercise, the work sets of its latest workout.

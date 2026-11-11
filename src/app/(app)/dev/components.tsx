@@ -32,6 +32,7 @@ import {
   Screen,
   Stepper,
   TextField,
+  TrendChart,
   type BadgeTone,
   type ButtonVariant,
 } from '@/components';
@@ -271,6 +272,30 @@ function ComponentCatalog() {
             />
             <Chip label="Disabled" selected={false} disabled onPress={() => {}} />
           </View>
+        </Section>
+
+        <Section title="TrendChart">
+          <TrendChart
+            kind="line"
+            points={[
+              { value: 100, label: '01/09' },
+              { value: 105, label: '' },
+              { value: 112, label: '01/10', highlight: true },
+              { value: 110, label: '' },
+              { value: 117, label: '01/11', highlight: true },
+            ]}
+            summary="Estimated 1RM went up from 100 kg to 117 kg (demo)."
+          />
+          <TrendChart
+            kind="bar"
+            points={[
+              { value: 2400, label: '01/09' },
+              { value: 3100, label: '' },
+              { value: 2800, label: '01/10' },
+              { value: 3600, label: '01/11', highlight: true },
+            ]}
+            summary="Volume per workout (demo)."
+          />
         </Section>
 
         <Section title="Logo">

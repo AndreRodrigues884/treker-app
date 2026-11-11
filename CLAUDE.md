@@ -20,7 +20,8 @@ Gym and swim tracking app for self-coached athletes. Expo (React Native) + TypeS
 ## UI conventions
 
 - Dark mode only in v1. Every color, font, size, spacing and radius comes from `src/theme`; no loose values in components.
-- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`, `OptionCard`, `Stepper`, `EmptyState`, `ListRow`, `Avatar`, `ConfirmDialog`, `ErrorNotice`, `Logo`). Review them in the dev-only catalog at `/dev/components`.
+- Build screens from `src/components` (`Screen`, `AppText`, `Button`, `Card`, `TextField`, `Chip`, `Badge`/`PrBadge`, `ProgressBar`, `Divider`, `OptionCard`, `Stepper`, `EmptyState`, `ListRow`, `Avatar`, `ConfirmDialog`, `ErrorNotice`, `Logo`, `TrendChart`). Review them in the dev-only catalog at `/dev/components`.
+- Charts: `TrendChart` (on `react-native-gifted-charts`, SVG, runs in Expo Go), theme colours and Geist Mono numbers, always with a `summary` for screen readers.
 - Icons: Lucide only (`lucide-react-native`), rendered through `Icon`. Never emoji as icons.
 - Fonts: Geist for text, Geist Mono (`AppText variant="numeric"`) for times, weights and reps.
 - Numbers shown to the user go through `src/core/format` (weights, swim times in centiseconds, distances).

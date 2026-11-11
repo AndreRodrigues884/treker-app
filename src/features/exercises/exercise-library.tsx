@@ -32,9 +32,9 @@ import type { ExerciseRow } from './repository';
 
 export type ExerciseLibraryProps =
   | {
-      // Consulting: the athlete's own exercises open for editing.
+      // Consulting: every exercise opens its progress screen.
       mode: 'browse';
-      onOpenCustom: (exercise: ExerciseRow) => void;
+      onOpen: (exercise: ExerciseRow) => void;
       onCreate: (name: string) => void;
     }
   | {
@@ -167,9 +167,7 @@ export function ExerciseLibrary(props: ExerciseLibraryProps) {
                   checked: props.picked.includes(exercise.id),
                   onPress: () => props.onToggle(exercise),
                 }
-              : isCustomExercise(exercise)
-                ? { kind: 'open' as const, onPress: () => props.onOpenCustom(exercise) }
-                : { kind: 'info' as const })}
+              : { kind: 'open' as const, onPress: () => props.onOpen(exercise) })}
           />
         ))}
       </View>

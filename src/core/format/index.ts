@@ -109,3 +109,28 @@ export function formatInputNumber(value: number | null, language: Language): str
     useGrouping: false,
   }).format(value);
 }
+
+// A short date for chart labels: "11/5" (en), "05/11" (pt).
+export function formatShortDate(date: LocalDate, language: Language): string {
+  return new Intl.DateTimeFormat(intlLocale(language), {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'numeric',
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
+// Which points of a long series get a label, so at most `max` labels fit: the first, the last and
+// evenly spaced ones in between.
+export function labelledIndexes(count: number, max = 5): Set<number> {
+  if (count <= max) return new Set(Array.from({ length: count }, (_, index) => index));
+  const step = (count - 1) / (max - 1);
+  return new Set(Array.from({ length: max }, (_, index) => Math.round(index * step)));
+}
+
+// A chart axis number, short: "950", "1.2K" (en), "1,2 mil" (pt).
+export function formatCompactNumber(value: number, language: Language): string {
+  return new Intl.NumberFormat(intlLocale(language), {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}

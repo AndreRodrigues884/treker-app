@@ -20,9 +20,16 @@ import {
 import { addSet, deleteSet, listSets, updateSet } from '@/features/gym/repository';
 import { completeOnboarding, getProfile, updateProfile } from '@/features/profile/repository';
 import {
+  getExerciseProgress,
+  getExerciseStats,
+  listExerciseHistory,
+  listGymRecords,
+} from '@/features/records/repository';
+import {
   getCurrentGymRecords,
   getLastPerformance,
   saveGymSession,
+  updateGymSession,
 } from '@/features/session/repository';
 import { addSwimEntry, deleteSwimEntry } from '@/features/swim/repository';
 import {
@@ -261,6 +268,60 @@ describe('gym session', () => {
     });
     expect(await getLastPerformance(ctx, [])).toEqual({});
     expect(await getCurrentGymRecords(ctx)).toEqual({ bench: 116.67 });
+  });
+});
+
+describe('editing a workout and reading progress', () => {
+  const workout = (id: string, localDate: string, weightKg: number) => ({
+    id,
+    local_date: localDate,
+    timezone: 'UTC',
+    started_at: `${localDate}T09:00:00.000Z`,
+    ended_at: null,
+    title: id,
+    template_id: null,
+    sets: [
+      {
+        id: `${id}-1`,
+        exercise_id: 'bench',
+        exercise_position: 0,
+        set_number: 1,
+        weight_kg: weightKg,
+        reps: 5,
+        duration_s: null,
+        difficulty: 'easy' as const,
+        is_warmup: false,
+      },
+    ],
+  });
+
+  beforeEach(async () => {
+    seedLibraryExercises([{ id: 'bench', name_en: 'Bench Press', name_pt: 'Supino' }]);
+    await saveGymSession(ctx, workout('w1', '2026-10-01', 100));
+    await saveGymSession(ctx, workout('w2', '2026-10-08', 110));
+  });
+
+  it('updates a workout in one request; the records follow', async () => {
+    const { ended_at: _ended, ...update } = workout('w2', '2026-10-08', 90);
+    expect(await updateGymSession(ctx, update)).toEqual([]);
+    expect(supabaseMock.rpc).toHaveBeenLastCalledWith('update_gym_session', { p_session: update });
+    expect((await listGymRecords(ctx)).map((r) => [r.exerciseId, r.valueKg, r.weightKg])).toEqual([
+      ['bench', 116.67, 100],
+    ]);
+  });
+
+  it('reads stats, progress from a date and the history by cursor', async () => {
+    expect(await getExerciseStats(ctx, 'bench')).toMatchObject({ set_count: 2 });
+    expect(
+      (await getExerciseProgress(ctx, 'bench', '2026-10-05')).map((p) => [p.localDate, p.isRecord]),
+    ).toEqual([['2026-10-08', true]]);
+    const first = await listExerciseHistory(ctx, 'bench', { limit: 1 });
+    expect(first.map((e) => [e.activityId, e.sets[0]?.difficulty])).toEqual([['w2', 'easy']]);
+    const next = await listExerciseHistory(ctx, 'bench', {
+      limit: 1,
+      before: { localDate: '2026-10-08', startedAt: '2026-10-08T09:00:00.000Z', id: 'w2' },
+    });
+    expect(next.map((e) => e.activityId)).toEqual(['w1']);
   });
 });
 

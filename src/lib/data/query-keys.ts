@@ -20,6 +20,18 @@ export const queryKeys = {
     ['user', userId, 'activities', 'last', [...exerciseIds].sort().join(',')] as const,
   records: (userId: string) => ['user', userId, 'records'] as const,
   currentGymRecords: (userId: string) => ['user', userId, 'records', 'current', 'gym'] as const,
+  gymRecords: (userId: string) => ['user', userId, 'records', 'gym'] as const,
+  // Everything the exercise screen shows; invalidated for the exercises a workout change touches.
+  exercise: (userId: string, exerciseId: string) =>
+    ['user', userId, 'exercise', exerciseId] as const,
+  exerciseRecord: (userId: string, exerciseId: string) =>
+    ['user', userId, 'exercise', exerciseId, 'record'] as const,
+  exerciseStats: (userId: string, exerciseId: string) =>
+    ['user', userId, 'exercise', exerciseId, 'stats'] as const,
+  exerciseProgress: (userId: string, exerciseId: string, from: string | null) =>
+    ['user', userId, 'exercise', exerciseId, 'progress', from ?? 'all'] as const,
+  exerciseHistory: (userId: string, exerciseId: string) =>
+    ['user', userId, 'exercise', exerciseId, 'history'] as const,
   exercises: (userId: string) => ['user', userId, 'exercises'] as const,
   templates: (userId: string) => ['user', userId, 'templates'] as const,
   templateList: (userId: string) => ['user', userId, 'templates', 'list'] as const,

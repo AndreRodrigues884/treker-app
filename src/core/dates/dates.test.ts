@@ -1,4 +1,12 @@
-import { addDays, isLocalDate, localDateOf, weekRange } from './index';
+import {
+  addDays,
+  instantOf,
+  isLocalDate,
+  localDateOf,
+  parseTimeOfDay,
+  timeOfDayIn,
+  weekRange,
+} from './index';
 
 describe('localDateOf', () => {
   it('uses the athlete timezone, not UTC', () => {
@@ -43,5 +51,32 @@ describe('isLocalDate', () => {
     expect(isLocalDate('2026-11-04')).toBe(true);
     expect(isLocalDate('2026-11-4')).toBe(false);
     expect(isLocalDate('2026-11-04T10:00:00Z')).toBe(false);
+  });
+});
+
+describe('times of day', () => {
+  it('reads "HH:MM"', () => {
+    expect(parseTimeOfDay('09:30')).toBe(570);
+    expect(parseTimeOfDay(' 7:05 ')).toBe(425);
+    expect(parseTimeOfDay('24:00')).toBeNull();
+    expect(parseTimeOfDay('9h30')).toBeNull();
+  });
+
+  it('turns a date and time in a timezone into the instant, summer and winter', () => {
+    // Lisbon is UTC+1 in summer and UTC+0 in winter.
+    expect(instantOf('2026-07-01', 570, 'Europe/Lisbon').toISOString()).toBe(
+      '2026-07-01T08:30:00.000Z',
+    );
+    expect(instantOf('2026-12-01', 570, 'Europe/Lisbon').toISOString()).toBe(
+      '2026-12-01T09:30:00.000Z',
+    );
+    // Just after midnight in Madrid is still the day before in UTC.
+    expect(instantOf('2026-11-05', 30, 'Europe/Madrid').toISOString()).toBe(
+      '2026-11-04T23:30:00.000Z',
+    );
+  });
+
+  it('and back: the time of day of an instant in a timezone', () => {
+    expect(timeOfDayIn(new Date('2026-07-01T08:30:00Z'), 'Europe/Lisbon')).toBe('09:30');
   });
 });

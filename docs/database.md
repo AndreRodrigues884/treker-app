@@ -182,6 +182,10 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
+Duas exceções, ambas no schema `private` (fora da API), com `execute` para `authenticated` só para as funções `security invoker` as poderem usar por dentro:
+- `private.rebuild_my_gym_keys`, que o `update_gym_session` chama no fim. Só reconstrói as chaves de `auth.uid()`, a partir dos dados do próprio atleta, que é o que os triggers fariam.
+- `private.estimate_one_rep_max`, que é só uma conta e é usada pelo `exercise_progress`.
+
 ### Listar treinos com os totais
 
 `public.list_activity_summaries(p_before_date date, p_before_started_at timestamptz, p_before_id uuid, p_limit int)` devolve uma página dos treinos do atleta (os do Perfil), os mais recentes primeiro, já com os totais de cada um. Os totais são calculados no Postgres, por isso a app nunca carrega as séries todas para os somar.
@@ -253,6 +257,39 @@ Testes das duas funções em `supabase/tests/18_gym_session.sql`:
 - devolve só os recordes desta atividade;
 - o `last_performance` ignora aquecimentos, atividades apagadas e dados de outros utilizadores, e escolhe a sessão mais recente do dia;
 - o anónimo não pode chamar nenhuma.
+
+### Editar uma sessão de ginásio
+
+`public.update_gym_session(p_session jsonb)` substitui um treino de ginásio gravado, num só pedido e numa só transação. Recebe o mesmo formato do `save_gym_session`, sem `ended_at`.
+
+- **A atividade:** muda o título, a data local e a hora de início (e o fuso, se vier).
+- **As séries enviadas** fazem upsert pelo `id`: as novas entram, as alteradas são atualizadas e uma que tinha sido tirada volta. Um id de outro treino nunca é movido para este.
+- **As outras séries do treino** ficam com `deleted_at`.
+- **Recordes reconstruídos uma só vez por chave, no fim**, para os exercícios de antes e de depois da edição. Um exercício que saiu do treino também é reconstruído.
+  - Enquanto a função muda o treino em várias instruções, liga a marca `treker.defer_record_rebuild`. Desde esta fase, a marca vale em todos os triggers de recordes das séries e das atividades (inserir, alterar).
+  - No fim desliga a marca e chama `private.rebuild_my_gym_keys`, que reconstrói só as chaves do próprio atleta (`auth.uid()`).
+- **Repetir o mesmo pedido deixa os mesmos dados.** Devolve os recordes que o treino tem depois da edição.
+- É `security invoker`, com `search_path` vazio, e só `authenticated` a pode executar. O treino de outro utilizador não é encontrado (`no_data_found`).
+
+### Ecrãs de recordes e de exercício
+
+As contas são feitas no Postgres, por isso a app nunca carrega todas as séries para as fazer. As três funções são `security invoker` e `stable`, e só `authenticated` as pode executar.
+
+- `public.current_gym_records(p_exercise_id uuid default null)`: o recorde atual de cada exercício (ou de um), com a série que o deu (peso e reps), os mais recentes primeiro.
+- `public.exercise_progress(p_exercise_id uuid, p_from date default null)`: um ponto por treino com esse exercício, do mais antigo para o mais recente, a partir de `p_from` (tudo quando vazio). Cada ponto traz:
+  - o melhor 1RM estimado das séries de trabalho;
+  - o volume (peso × reps, com a assistência a contar como zero) e o número de séries;
+  - se o treino bateu um recorde.
+- `public.exercise_history(p_exercise_id, p_before_date, p_before_started_at, p_before_id, p_limit)`: os treinos com esse exercício, os mais recentes primeiro, com as séries desse exercício em JSON (com a dificuldade). Usa o mesmo cursor e as mesmas regras que o `list_activity_summaries` (no máximo 50 por página).
+
+Testes em `supabase/tests/19_gym_session_edit.sql`:
+- editar uma série que era recorde reconstrói o histórico de recordes;
+- tirar um exercício reconstrói a chave dele;
+- mudar a data põe os recordes por ordem de data;
+- uma reconstrução por chave;
+- repetir não muda nada, e a marca fica desligada no fim;
+- não edita o treino de outro utilizador;
+- as três funções de leitura (e o anónimo não as pode chamar).
 
 ### Gravar um treino guardado
 
@@ -362,6 +399,7 @@ Contam todas as entradas não apagadas, de prova e de treino. Piscinas de 25 m, 
 - **Triggers por instrução** em `gym_sets` e `swim_entries` juntam as chaves tocadas por cada insert, update ou delete e reconstroem cada chave **uma só vez por instrução**, mesmo que a instrução mexa em 50 séries. Alterações que não afetam recordes (como o RPE ou a dificuldade) não reconstroem nada.
 - **Também reconstrói quando:**
   - uma atividade muda de `local_date`, `started_at` ou `bodyweight_kg`, ou é apagada (com `delete_activity`, uma só vez por chave, ver [Apagar uma atividade](#apagar-uma-atividade));
+  - um treino é editado com `update_gym_session` (uma só vez por chave, incluindo os exercícios que saíram do treino);
   - um exercício muda de `unit`, `tracks_load` ou `adds_bodyweight`.
 - **Gravações em simultâneo:** cada reconstrução pede um bloqueio por utilizador (`pg_advisory_xact_lock`) que dura até ao fim da transação. Duas gravações do mesmo atleta ao mesmo tempo esperam uma pela outra, e a segunda já vê os dados da primeira. Por isso nunca há recordes duplicados.
 

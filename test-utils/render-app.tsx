@@ -13,6 +13,8 @@ import RecordsScreen from '@/app/(app)/(drawer)/records';
 import WorkoutsScreen from '@/app/(app)/(drawer)/workouts';
 import AppLayout from '@/app/(app)/_layout';
 import WorkoutScreen from '@/app/(app)/activities/[id]';
+import EditWorkoutScreen from '@/app/(app)/activities/edit/[id]';
+import ExerciseScreen from '@/app/(app)/exercise/[id]';
 import EditExerciseScreen from '@/app/(app)/exercises/[id]';
 import ExercisesScreen from '@/app/(app)/exercises/index';
 import NewExerciseScreen from '@/app/(app)/exercises/new';
@@ -90,6 +92,8 @@ export function renderApp(initialUrl = '/') {
       '(app)/(drawer)/records': RecordsScreen,
       '(app)/(drawer)/workouts': WorkoutsScreen,
       '(app)/activities/[id]': WorkoutScreen,
+      '(app)/activities/edit/[id]': EditWorkoutScreen,
+      '(app)/exercise/[id]': ExerciseScreen,
       '(app)/exercises/[id]': EditExerciseScreen,
       '(app)/exercises/index': ExercisesScreen,
       '(app)/exercises/new': NewExerciseScreen,

@@ -8,7 +8,8 @@ import { interpolate } from '@/core/i18n';
 import { useDataContext } from '@/features/auth/auth-provider';
 import { ExerciseLibrary } from '@/features/exercises/exercise-library';
 import { useExercises } from '@/features/exercises/queries';
-import { GYM_SESSION_PICK } from '@/features/session/pick';
+import { addExercisesToEdit } from '@/features/session/edit-store';
+import { editedActivity, GYM_SESSION_PICK } from '@/features/session/pick';
 import { useSessionActions } from '@/features/session/queries';
 import {
   clearPickedExercises,
@@ -19,7 +20,8 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { colors, sizes, spacing } from '@/theme';
 
-// The exercise library. Without params it is for consulting (own exercises open for editing).
+// The exercise library. Without params it is for consulting (each exercise opens its progress
+// screen, where own exercises can be edited).
 // ?pick=gym-session adds the ticked exercises to the workout in progress instead.
 // Both modes have "New exercise"; in a multiple choice the new exercise comes back ticked.
 // With ?pick=<template id> it is a multiple choice: the ticked exercises are added, in the order
@@ -43,8 +45,8 @@ function BrowseExercises() {
         />
         <ExerciseLibrary
           mode="browse"
-          onOpenCustom={(exercise) =>
-            router.push({ pathname: '/exercises/[id]', params: { id: exercise.id } })
+          onOpen={(exercise) =>
+            router.push({ pathname: '/exercise/[id]', params: { id: exercise.id } })
           }
           onCreate={(name) => router.push({ pathname: '/exercises/new', params: { name } })}
         />
@@ -66,9 +68,13 @@ function PickExercises({ session }: { session: string }) {
       const exercise = byId.get(id);
       return exercise ? [exercise] : [];
     });
+    const edited = editedActivity(session);
     if (session === GYM_SESSION_PICK) {
       // Into the workout in progress, each with "last time".
       await sessionActions.addExercises(rows);
+    } else if (edited) {
+      // Into a saved workout being edited.
+      addExercisesToEdit(edited, rows, ctx.newId);
     } else {
       const chosen = rows.map((exercise) => ({ id: exercise.id, unit: exercise.unit }));
       setTemplateDraft(session, (draft) => addExercises(draft, chosen, ctx.newId));

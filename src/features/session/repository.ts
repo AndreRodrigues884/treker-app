@@ -1,7 +1,7 @@
 // The gym session: saving a finished workout (Postgres save_gym_session, one request, one
 // transaction), "last time" per exercise (last_performance) and the current records, for the
 // live PR seal.
-import type { LastPerformance, SaveSessionPayload } from '@/core/session';
+import type { LastPerformance, SaveSessionPayload, UpdateSessionPayload } from '@/core/session';
 import type { PersonalRecordRow } from '@/features/activities/repository';
 import type { DataContext } from '@/lib/data/context';
 import { unwrap } from '@/lib/data/result';
@@ -17,6 +17,19 @@ export async function saveGymSession(
   payload: SaveSessionPayload,
 ): Promise<PersonalRecordRow[]> {
   return unwrap(await supabase.rpc('save_gym_session', { p_session: payload }));
+}
+
+/**
+ * Replaces a saved workout in one request (Postgres update_gym_session): its title, date and
+ * start time, and its sets (new ones added, changed ones updated, those not sent marked deleted).
+ * Records and stats are rebuilt once per exercise, including exercises taken out. Repeating it
+ * leaves the same data. Returns the records the workout holds afterwards.
+ */
+export async function updateGymSession(
+  _ctx: DataContext,
+  payload: UpdateSessionPayload,
+): Promise<PersonalRecordRow[]> {
+  return unwrap(await supabase.rpc('update_gym_session', { p_session: payload }));
 }
 
 // For each exercise, the work sets of the latest workout in which the athlete did it.

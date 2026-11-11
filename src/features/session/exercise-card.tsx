@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { GripVertical, Pencil, Trash2, Trophy } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -12,21 +13,33 @@ import {
   type GymSession,
   type SessionExercise,
   type SessionSet,
+  type SetValues,
 } from '@/core/session';
 import { useI18n } from '@/lib/i18n';
 import { accentTints, colors, opacity, radii, sizes, spacing, type AccentTone } from '@/theme';
 
 import { difficultyLabel, difficultyTone } from './difficulty';
 import { PlanPanel } from './plan-panel';
-import type { useSessionActions } from './queries';
 import { SetPanel } from './set-panel';
+
+// What a card does to the workout: the session in progress and the edit of a saved workout both
+// provide these.
+export type SessionCardActions = {
+  setPlan: (
+    key: string,
+    plan: { setCount: number; reps: number | null; seconds: number | null },
+  ) => Promise<void>;
+  removeExercise: (key: string) => Promise<void>;
+  moveExercise: (key: string, offset: -1 | 1) => Promise<void>;
+  saveSet: (key: string, setId: string, values: SetValues) => Promise<void>;
+};
 
 export type SessionExerciseCardProps = {
   session: GymSession;
   exercise: SessionExercise;
   index: number;
   name: string;
-  actions: ReturnType<typeof useSessionActions>;
+  actions: SessionCardActions;
 };
 
 /**
@@ -66,9 +79,16 @@ export function SessionExerciseCard({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.title}>
-          <AppText variant="heading" accessibilityRole="header" numberOfLines={2}>
-            {name}
-          </AppText>
+          {/* The name opens the exercise's progress screen. */}
+          <Pressable
+            onPress={() => router.push({ pathname: '/exercise/[id]', params: { id: exercise.id } })}
+            accessibilityRole="link"
+            accessibilityLabel={interpolate(t.exercise.open, { name })}
+          >
+            <AppText variant="heading" accessibilityRole="header" numberOfLines={2}>
+              {name}
+            </AppText>
+          </Pressable>
           <AppText color="muted">{planText}</AppText>
         </View>
         <AppText

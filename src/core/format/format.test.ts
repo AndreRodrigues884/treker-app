@@ -1,12 +1,15 @@
 import {
   formatClock,
+  formatCompactNumber,
   formatDistance,
   formatDuration,
   formatInputNumber,
   formatLocalDate,
+  formatShortDate,
   formatSwimTime,
   formatWeight,
   initialsOf,
+  labelledIndexes,
 } from './index';
 
 const NBSP = ' ';
@@ -111,5 +114,21 @@ describe('formatInputNumber', () => {
     expect(formatInputNumber(97.5, 'pt')).toBe('97,5');
     expect(formatInputNumber(1250, 'en')).toBe('1250');
     expect(formatInputNumber(null, 'pt')).toBe('');
+  });
+});
+
+describe('chart labels', () => {
+  it('compact axis numbers', () => {
+    expect(formatCompactNumber(950, 'en')).toBe('950');
+    expect(formatCompactNumber(1250, 'en')).toBe('1.3K');
+  });
+
+  it('short dates', () => {
+    expect(formatShortDate('2026-11-05', 'pt')).toBe('05/11');
+  });
+
+  it('label at most 5 points of a long series, always the first and the last', () => {
+    expect([...labelledIndexes(3)]).toEqual([0, 1, 2]);
+    expect([...labelledIndexes(9)].sort((a, b) => a - b)).toEqual([0, 2, 4, 6, 8]);
   });
 });

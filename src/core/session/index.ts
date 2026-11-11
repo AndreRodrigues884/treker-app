@@ -633,6 +633,127 @@ export function toSavePayload(session: GymSession): SaveSessionPayload {
   };
 }
 
+// Editing a saved workout --------------------------------------------------------------------------
+// The same session model, loaded from a saved workout: every set is done, there is no rest timer
+// and no live PR seal (Postgres rebuilds the records when the changes are saved).
+
+export type SavedSet = {
+  id: string;
+  exercise_id: string;
+  exercise_position: number;
+  set_number: number;
+  weight_kg: number | null;
+  reps: number | null;
+  duration_s: number | null;
+  difficulty: Difficulty | null;
+  deleted_at: string | null;
+};
+
+export type LoadWorkoutInput = {
+  activity: {
+    id: string;
+    user_id: string;
+    template_id: string | null;
+    title: string | null;
+    local_date: string;
+    timezone: string;
+    started_at: string | null;
+  };
+  sets: readonly SavedSet[];
+  exercises: Readonly<Record<string, ExerciseInfo>>;
+  weightUnit: WeightUnit;
+  bodyweightKg: number | null;
+  newId: () => string;
+};
+
+// A saved workout as a session to edit: one exercise per position, in order, its sets done.
+export function sessionFromWorkout(input: LoadWorkoutInput): GymSession {
+  const byPosition = new Map<number, SavedSet[]>();
+  for (const set of input.sets) {
+    if (set.deleted_at !== null) continue;
+    byPosition.set(set.exercise_position, [...(byPosition.get(set.exercise_position) ?? []), set]);
+  }
+  const exercises = [...byPosition.entries()]
+    .sort(([a], [b]) => a - b)
+    .flatMap(([, sets]) => {
+      const first = sets[0];
+      const info = first ? input.exercises[first.exercise_id] : undefined;
+      if (!first || !info) return [];
+      const ordered = [...sets].sort((a, b) => a.set_number - b.set_number);
+      return [
+        {
+          ...info,
+          key: input.newId(),
+          targetReps: null,
+          targetSeconds: null,
+          last: [],
+          sets: ordered.map((set) => ({
+            id: set.id,
+            weight: set.weight_kg === null ? null : fromKilograms(set.weight_kg, input.weightUnit),
+            reps: set.reps,
+            seconds: set.duration_s,
+            difficulty: set.difficulty,
+            done: true,
+            pr: false,
+          })),
+        },
+      ];
+    });
+  const { activity } = input;
+  return {
+    version: SESSION_VERSION,
+    id: activity.id,
+    userId: activity.user_id,
+    templateId: activity.template_id,
+    templateName: null,
+    title: activity.title ?? '',
+    startedAt: activity.started_at ?? `${activity.local_date}T12:00:00.000Z`,
+    localDate: activity.local_date,
+    timezone: activity.timezone,
+    weightUnit: input.weightUnit,
+    bodyweightKg: input.bodyweightKg,
+    exercises,
+    restDurationS: DEFAULT_REST_S,
+    rest: null,
+    restNotificationId: null,
+  };
+}
+
+// "OK" on a set while editing: its values, done, no rest timer and no live seal.
+export function saveEditedSet(
+  session: GymSession,
+  key: string,
+  setId: string,
+  values: SetValues,
+): GymSession {
+  return mapExercise(session, key, (exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) =>
+      set.id === setId ? { ...set, ...values, done: true, pr: false } : set,
+    ),
+  }));
+}
+
+// When the workout happened: the athlete's calendar date and the start instant.
+export function setSessionWhen(
+  session: GymSession,
+  when: { localDate: string; startedAt: string },
+): GymSession {
+  return { ...session, localDate: when.localDate, startedAt: when.startedAt };
+}
+
+export type UpdateSessionPayload = Omit<SaveSessionPayload, 'ended_at'>;
+
+/**
+ * The p_session argument of update_gym_session. The sets sent are the workout as it should be:
+ * new ones (new ids) are added, changed ones updated, and any set of the workout that is not sent
+ * is marked deleted by Postgres. Only done sets are sent, with positions and numbers without gaps.
+ */
+export function toUpdatePayload(session: GymSession): UpdateSessionPayload {
+  const { ended_at: _ended, ...payload } = toSavePayload(session);
+  return payload;
+}
+
 // The draft on the phone ---------------------------------------------------------------------------
 // Fields added after the first drafts were written are optional here, so a workout in progress
 // survives an app update.

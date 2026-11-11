@@ -598,9 +598,50 @@ export type Database = {
       };
     };
     Functions: {
+      current_gym_records: {
+        Args: { p_exercise_id?: string };
+        Returns: {
+          activity_id: string;
+          exercise_id: string;
+          gym_set_id: string;
+          local_date: string;
+          previous_value: number;
+          reps: number;
+          value: number;
+          weight_kg: number;
+        }[];
+      };
       delete_activity: { Args: { p_activity_id: string }; Returns: undefined };
       delete_custom_exercise: { Args: { p_exercise_id: string }; Returns: undefined };
       delete_my_account: { Args: Record<PropertyKey, never>; Returns: undefined };
+      exercise_history: {
+        Args: {
+          p_before_date?: string;
+          p_before_id?: string;
+          p_before_started_at?: string;
+          p_exercise_id: string;
+          p_limit?: number;
+        };
+        Returns: {
+          activity_id: string;
+          local_date: string;
+          sets: Json;
+          started_at: string;
+          title: string;
+        }[];
+      };
+      exercise_progress: {
+        Args: { p_exercise_id: string; p_from?: string };
+        Returns: {
+          activity_id: string;
+          best_one_rep_max_kg: number;
+          is_record: boolean;
+          local_date: string;
+          set_count: number;
+          started_at: string;
+          volume_kg: number;
+        }[];
+      };
       last_performance: {
         Args: { p_exercise_ids: string[] };
         Returns: {
@@ -662,6 +703,33 @@ export type Database = {
         };
       };
       save_workout_template: { Args: { p_template: Json }; Returns: undefined };
+      update_gym_session: {
+        Args: { p_session: Json };
+        Returns: {
+          activity_id: string;
+          created_at: string;
+          distance: number | null;
+          exercise_id: string | null;
+          gym_set_id: string | null;
+          id: string;
+          local_date: string;
+          pool_length: Database['public']['Enums']['pool_length'] | null;
+          previous_value: number | null;
+          sequence: number;
+          stroke: Database['public']['Enums']['swim_stroke'] | null;
+          swim_entry_id: string | null;
+          swim_kind: Database['public']['Enums']['swim_kind'] | null;
+          type: Database['public']['Enums']['activity_type'];
+          user_id: string;
+          value: number;
+        }[];
+        SetofOptions: {
+          from: '*';
+          to: 'personal_records';
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
     };
     Enums: {
       activity_type: 'gym' | 'swim';

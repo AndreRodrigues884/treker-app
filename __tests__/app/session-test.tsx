@@ -207,7 +207,8 @@ describe('a gym session from start to the Profile', () => {
     await screen.findByRole('header', { name: s.savedTitle });
     expect(
       screen.getByLabelText(
-        `${en.records.prLabel}: Barbell Bench Press, ${en.workout.oneRepMax.replace('{value}', '120 kg')}`,
+        // With the best it beat (last time's 97.5 x 6 = 117 kg).
+        `${en.records.prLabel}: Barbell Bench Press, ${en.workout.oneRepMax.replace('{value}', '120 kg')}, ${en.session.previousRecord.replace('{value}', '117 kg')}`,
       ),
     ).toBeOnTheScreen();
 

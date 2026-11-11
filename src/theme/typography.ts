@@ -11,16 +11,18 @@ export const typography = {
     lineHeight: 44,
     letterSpacing: -1,
   },
+  // Screen titles.
   title: {
     fontFamily: fontFamilies.semiBold,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.5,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.4,
   },
+  // Section titles and card names.
   heading: {
     fontFamily: fontFamilies.semiBold,
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 24,
     letterSpacing: -0.2,
   },
   body: {

@@ -16,3 +16,4 @@ export { ProgressBar, type ProgressBarProps } from './progress-bar';
 export { Screen, type ScreenProps } from './screen';
 export { Stepper, type StepperProps } from './stepper';
 export { TextField, type TextFieldKind, type TextFieldProps } from './text-field';
+export { TrendChart, type TrendChartPoint, type TrendChartProps } from './trend-chart';

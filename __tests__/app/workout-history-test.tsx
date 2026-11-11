@@ -297,8 +297,9 @@ describe('the workout screen (read only)', () => {
         `${en.records.prLabel}: Barbell Bench Press, ${w.oneRepMax.replace('{value}', '116.7 kg')}`,
       ),
     ).toBeOnTheScreen();
-    // Read only: nothing to edit or delete yet.
-    expect(screen.queryByRole('button', { name: /edit|delete/i })).not.toBeOnTheScreen();
+    // A gym workout can be edited or deleted (phase 1c).
+    expect(screen.getByRole('button', { name: w.edit })).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: w.delete })).toBeOnTheScreen();
   });
 
   it('shows the swim times with the record, and the distance in the athlete units', async () => {

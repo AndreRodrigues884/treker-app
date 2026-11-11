@@ -35,3 +35,58 @@ export function weekRange(date: LocalDate): { start: LocalDate; end: LocalDate }
   const start = addDays(date, -daysSinceMonday);
   return { start, end: addDays(start, 6) };
 }
+
+const TIME_OF_DAY = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+// "09:30" or "9:30" -> minutes after midnight; null when not a time of day.
+export function parseTimeOfDay(text: string): number | null {
+  const match = TIME_OF_DAY.exec(text.trim());
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+// The time of day of an instant in a timezone, as "HH:MM".
+export function timeOfDayIn(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(instant);
+}
+
+// The offset of a timezone from UTC at an instant, in minutes (Lisbon in summer: +60).
+function offsetMinutes(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  const asUtc = Date.UTC(
+    value('year'),
+    value('month') - 1,
+    value('day'),
+    value('hour'),
+    value('minute'),
+    value('second'),
+  );
+  return Math.round((asUtc - instant.getTime()) / 60_000);
+}
+
+/**
+ * The instant of a calendar date and time of day in a timezone: ("2026-07-01", 9:30, Lisbon) ->
+ * 08:30 UTC. Used when the athlete changes when a workout started. The offset is taken at that
+ * moment, so summer and winter time are both right.
+ */
+export function instantOf(date: LocalDate, minutes: number, timeZone: string): Date {
+  const naive = Date.parse(`${date}T00:00:00Z`) + minutes * 60_000;
+  const first = naive - offsetMinutes(new Date(naive), timeZone) * 60_000;
+  // Near a daylight-saving change the offset can differ at the real instant: correct once.
+  return new Date(naive - offsetMinutes(new Date(first), timeZone) * 60_000);
+}

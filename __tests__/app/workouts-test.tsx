@@ -325,20 +325,21 @@ describe('custom exercises', () => {
       deleted_at: null,
     });
 
+    // The library opens the exercise's screen; its form is behind "Edit exercise".
     await renderApp('/exercises');
     await fireEvent.press(
       await screen.findByRole('button', { name: row(`Zercher squat, ${ex.yours}`, '') }),
     );
+    await fireEvent.press(await screen.findByRole('button', { name: en.exercise.editExercise }));
     await screen.findByRole('header', { name: form.editTitle });
     expect(screen.getByText(form.changesRecords)).toBeOnTheScreen();
 
     await fireEvent.changeText(screen.getByLabelText(form.name), 'Zercher squat (pause)');
     await fireEvent.press(screen.getByRole('button', { name: en.common.save }));
-    await screen.findByText('Zercher squat (pause)');
+    // Back on the exercise's screen, with the new name.
+    await screen.findByRole('header', { name: 'Zercher squat (pause)' });
 
-    await fireEvent.press(
-      screen.getByRole('button', { name: row(`Zercher squat \\(pause\\), ${ex.yours}`, '') }),
-    );
+    await fireEvent.press(screen.getByRole('button', { name: en.exercise.editExercise }));
     const deleteButton = await screen.findByRole('button', { name: form.delete });
     // Red with white text.
     expect(deleteButton).toHaveStyle({ backgroundColor: colors.dangerSolid });
