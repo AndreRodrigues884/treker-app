@@ -3,7 +3,6 @@ import { fireEvent, screen, waitFor, within } from 'expo-router/testing-library'
 
 import { addDays, localDateOf } from '@/core/dates';
 import { en } from '@/core/i18n/en';
-import { HISTORY_PAGE_SIZE } from '@/features/records/queries';
 import { resetEditStore } from '@/features/session/edit-store';
 import { resetSessionStore } from '@/features/session/session-store';
 import { getDeviceTimezone } from '@/lib/device';
@@ -111,11 +110,10 @@ describe('editing a saved workout', () => {
     await renderApp('/records');
     expect(await screen.findByText(recordText('128.3'))).toBeOnTheScreen();
 
-    // Records → the exercise → W2 in its history → Edit.
-    await fireEvent.press(screen.getByRole('button', { name: /^Barbell Bench Press, / }));
-    await fireEvent.press(
-      await screen.findByRole('button', { name: /^Open the workout of .*, W2, / }),
-    );
+    // Menu → Profile → W2 → Edit.
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.profile }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Open W2, / }));
     await fireEvent.press(await screen.findByRole('button', { name: en.workout.edit }));
     await screen.findByRole('header', { name: en.editWorkout.title });
 
@@ -130,9 +128,9 @@ describe('editing a saved workout', () => {
     await fireEvent.changeText(screen.getByLabelText(en.editWorkout.name), 'W2 (light)');
     await fireEvent.press(screen.getByRole('button', { name: en.editWorkout.save }));
 
-    // Saved: back to where the workout was opened (the exercise's screen).
-    await screen.findByRole('header', { name: 'Barbell Bench Press' });
-    expect(screen).toHavePathname('/exercise/bench');
+    // Saved: back to where the workout was opened (the Profile), with the new title.
+    expect(await screen.findByRole('button', { name: /^Open W2 \(light\), / })).toBeOnTheScreen();
+    expect(screen).toHavePathname('/profile');
     expect(supabaseMock.rpc).toHaveBeenCalledWith('update_gym_session', {
       p_session: expect.objectContaining({
         id: 'w2',
@@ -142,7 +140,8 @@ describe('editing a saved workout', () => {
     });
 
     // Back to the records: the record is W1's 116.7 kg now.
-    await fireEvent.press(screen.getByRole('button', { name: en.common.back }));
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.records }));
     expect(await screen.findByText(recordText('116.7'))).toBeOnTheScreen();
     expect(screen.queryByText(recordText('128.3'))).not.toBeOnTheScreen();
   });
@@ -214,15 +213,15 @@ describe('deleting a saved workout', () => {
 });
 
 describe('exercise screen', () => {
-  it('the record, stats, charts and the history one page at a time', async () => {
-    for (let week = HISTORY_PAGE_SIZE + 1; week >= 0; week -= 1) {
+  it('the record, stats and charts', async () => {
+    for (let week = 11; week >= 0; week -= 1) {
       await saveWorkout(
         `w${String(week).padStart(2, '0')}`,
         daysAgo(week * 7),
         [
           {
             exercise: 'bench',
-            weight: 100 + (HISTORY_PAGE_SIZE + 1 - week) * 2.5,
+            weight: 100 + (11 - week) * 2.5,
             reps: 5,
             difficulty: 'medium',
           },
@@ -245,25 +244,8 @@ describe('exercise screen', () => {
     ).toBeOnTheScreen();
     expect(screen.getByLabelText(/^Volume per workout went up/)).toBeOnTheScreen();
 
-    // History: one page, then the next by cursor.
-    expect(await screen.findAllByRole('button', { name: /^Open the workout of / })).toHaveLength(
-      HISTORY_PAGE_SIZE,
-    );
-    expect(screen.getAllByText(en.session.difficulty.medium).length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getByRole('button', { name: en.workout.showMore }));
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: /^Open the workout of / })).toHaveLength(12),
-    );
-    expect(supabaseMock.rpc).toHaveBeenLastCalledWith(
-      'exercise_history',
-      // Newest first: the first page ends with week 9.
-      expect.objectContaining({ p_before_id: 'w09', p_before_date: daysAgo(63) }),
-    );
-    expect(screen.queryByRole('button', { name: en.workout.showMore })).not.toBeOnTheScreen();
-
-    // A row opens its workout.
-    await fireEvent.press(screen.getAllByRole('button', { name: /^Open the workout of / })[0]!);
-    expect(await screen.findByRole('header', { name: 'Week 0' })).toBeOnTheScreen();
+    // No history list on this screen (removed): the workouts are in the Profile.
+    expect(screen.queryByText(en.exercise.history)).not.toBeOnTheScreen();
   });
 
   it('is opened from the library and from a workout', async () => {

@@ -246,7 +246,8 @@ otp_expiry = 600
 # sender_name = "Admin"
 
 # Sign-in by 6-digit code: new users get the confirmation template, existing users the magic link
-# template; both show the code ({{ .Token }}) instead of a link.
+# template; both show the code ({{ .Token }}) instead of a link. The online project gets the same
+# settings from deploy/supabase/config.toml (npm run auth:push): keep the two in sync.
 [auth.email.template.confirmation]
 subject = "Treker: your sign-in code / o teu código de acesso"
 content_path = "./supabase/templates/sign-in-code.html"

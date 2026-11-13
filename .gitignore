@@ -30,9 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (only the .example files are committed)
 .env*.local
 .env
+.env.development
+.env.production
 
 # typescript
 *.tsbuildinfo
@@ -42,3 +44,10 @@ example
 # generated native folders
 /ios
 /android
+
+# Copied from supabase/templates by scripts/supabase-online.js (auth:diff, auth:push)
+deploy/supabase/templates/
+deploy/supabase/.temp/
+
+# Backups of the online database (npm run db:backup): personal data, never committed
+backups/

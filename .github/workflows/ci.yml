@@ -1,0 +1,83 @@
+# Continuous integration: on every push and pull request, the app checks (lint, typecheck, Jest) and
+# the database tests (pgTAP) against a local Supabase started from the migrations.
+#
+# It never uses the online project: no secrets, no `supabase link`, no `db push` or `config push`.
+# The local Supabase it starts has the CLI's own development keys, which only exist inside the job.
+# See docs/deploy.md.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Read the code, nothing else.
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Lint, typecheck and Jest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # expo-env.d.ts and .expo/types (the typed routes) are generated, not committed; the dev
+      # server writes them locally. Without .env files, Expo reads no EXPO_PUBLIC_ values, and the
+      # tests mock the Supabase client.
+      - name: Generate Expo types
+        run: npx expo customize tsconfig.json
+        env:
+          CI: 'true'
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Jest
+        run: npm test -- --ci
+
+  database:
+    name: pgTAP (local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # The Supabase CLI is a devDependency, so CI uses the same version as development.
+      - name: Install
+        run: npm ci
+
+      # Applies every migration to an empty database, then seed.sql. Only the services the tests
+      # need: the database, Auth (its schema) and the API.
+      - name: Start Supabase
+        run: >-
+          npx supabase start
+          -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,mailpit,storage-api,postgres-meta
+
+      - name: pgTAP
+        run: npx supabase test db
+
+      - name: Stop Supabase
+        if: always()
+        run: npx supabase stop --no-backup

@@ -1,6 +1,8 @@
 // Source dictionary: its shape defines the Messages type every other language must match.
 export const en = {
   common: {
+    localBadge: 'LOCAL',
+    localBadgeLabel: 'Connected to the local Supabase',
     loading: 'Loading',
     back: 'Back',
     next: 'Next',

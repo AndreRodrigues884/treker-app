@@ -44,6 +44,8 @@ jest.mock('react-native-gifted-charts', () => {
 const today = localDateOf(new Date(), getDeviceTimezone());
 const daysAgo = (days: number) => addDays(today, -days);
 const p = en.progress;
+// The Statistics screen's first data (several requests) can take longer than the default 1 s.
+const slow = { timeout: 5000 };
 
 type SetInput = { exercise: string; weight?: number; reps?: number; seconds?: number };
 
@@ -292,6 +294,32 @@ describe('the saved workout screen', () => {
   });
 });
 
+// Two workouts where the set counts are bench 6, deadlift 5, squat 4, row 3, press 2, curl 1 (and
+// planks, which have no 1RM).
+async function strengthWorkouts() {
+  const plan: [string, [number, number]][] = [
+    ['bench', [3, 3]],
+    ['deadlift', [3, 2]],
+    ['squat', [2, 2]],
+    ['row', [2, 1]],
+    ['press', [1, 1]],
+    ['curl', [0, 1]],
+  ];
+  for (const [index, day] of [20, 10].entries()) {
+    await saveWorkout(`w${index}`, daysAgo(day), [
+      ...plan.flatMap(([exercise, counts]) =>
+        Array.from({ length: counts[index] ?? 0 }, () => ({
+          exercise,
+          weight: (exercise === 'curl' ? 30 : 100) + index * 10,
+          reps: 5,
+        })),
+      ),
+      { exercise: 'plank', seconds: 60 },
+      { exercise: 'plank', seconds: 60 },
+    ]);
+  }
+}
+
 describe('the Statistics screen', () => {
   it('is in the menu between Records and Profile', async () => {
     await renderApp('/');
@@ -304,11 +332,10 @@ describe('the Statistics screen', () => {
     expect(await screen.findByText(en.stats.perWeek)).toBeOnTheScreen();
   });
 
-  it('the period changes every section; workouts per week with the goal; the workouts done most', async () => {
-    addTemplate('push-a', 'Push A', ['bench']);
+  it('the period changes every section; workouts per week with the goal', async () => {
     await saveWorkout('w1', daysAgo(60), [{ exercise: 'bench', weight: 100, reps: 5 }]);
-    await saveWorkout('w2', daysAgo(9), [{ exercise: 'bench', weight: 100, reps: 5 }], 'push-a');
-    await saveWorkout('w3', daysAgo(2), [{ exercise: 'bench', weight: 100, reps: 6 }], 'push-a');
+    await saveWorkout('w2', daysAgo(9), [{ exercise: 'bench', weight: 100, reps: 5 }]);
+    await saveWorkout('w3', daysAgo(2), [{ exercise: 'bench', weight: 100, reps: 6 }]);
     await renderApp('/stats');
 
     // 3 months by default.
@@ -318,9 +345,9 @@ describe('the Statistics screen', () => {
       ),
     ).toBeOnTheScreen();
     expect(screen.getByLabelText(`${en.stats.goal}: 3 a week`)).toBeOnTheScreen();
-    expect(
-      await screen.findByRole('button', { name: /^Push A, 2 times, last on / }),
-    ).toBeOnTheScreen();
+    expect(screen.getByText('Workouts logged per muscle group · last 3 months')).toBeOnTheScreen();
+    // The saved workouts done most are no longer on this screen.
+    expect(screen.queryByText(en.stats.topWorkouts)).not.toBeOnTheScreen();
 
     await fireEvent.press(screen.getByRole('togglebutton', { name: en.stats.ranges['4w'] }));
     expect(
@@ -328,66 +355,118 @@ describe('the Statistics screen', () => {
         /^2 workouts in the last 4 weeks, an average of .+ a week\. Your goal is 3 a week\.$/,
       ),
     ).toBeOnTheScreen();
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('weekly_summary', {
-      p_from: statsRangeStart('4w', today),
-      p_to: today,
-    });
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('template_usage', {
-      p_from: statsRangeStart('4w', today),
-      p_to: today,
-    });
+    expect(screen.getByText('Workouts logged per muscle group · last 4 weeks')).toBeOnTheScreen();
+    for (const fn of ['weekly_summary', 'volume_by_muscle_group']) {
+      expect(supabaseMock.rpc).toHaveBeenCalledWith(fn, {
+        p_from: statsRangeStart('4w', today),
+        p_to: today,
+      });
+    }
 
     // "All": from the first workout, without a start date.
     await fireEvent.press(screen.getByRole('togglebutton', { name: en.stats.ranges.all }));
     expect(await screen.findByLabelText(/^3 workouts since the first workout, /)).toBeOnTheScreen();
     expect(supabaseMock.rpc).toHaveBeenCalledWith('weekly_summary', { p_from: null, p_to: today });
-
-    // A saved workout opens its screen.
-    await fireEvent.press(screen.getByRole('button', { name: /^Push A, 2 times, last on / }));
-    expect(await screen.findByText(/^Done 2 times · /)).toBeOnTheScreen();
   });
 
-  it('strength: the exercises done most by default, then the athlete chooses up to 5', async () => {
-    // Set counts: bench 6, deadlift 5, squat 4, row 3, press 2, curl 1; each in two workouts.
-    // Sets in each of the two workouts.
-    const plan: [string, [number, number]][] = [
-      ['bench', [3, 3]],
-      ['deadlift', [3, 2]],
-      ['squat', [2, 2]],
-      ['row', [2, 1]],
-      ['press', [1, 1]],
-      ['curl', [0, 1]],
-    ];
-    for (const [index, day] of [20, 10].entries()) {
-      await saveWorkout(`w${index}`, daysAgo(day), [
-        ...plan.flatMap(([exercise, counts]) =>
-          Array.from({ length: counts[index] ?? 0 }, () => ({
-            exercise,
-            weight: (exercise === 'curl' ? 30 : 100) + index * 10,
-            reps: 5,
-          })),
-        ),
-        { exercise: 'plank', seconds: 60 },
-        { exercise: 'plank', seconds: 60 },
-      ]);
-    }
+  it('strength: one chart for the exercises done most; the chips switch it', async () => {
+    await strengthWorkouts();
     await renderApp('/stats');
 
-    // The 5 done most (not the plank, which has no 1RM; not the curl, done least).
+    // The 5 done most as chips (not the plank, which has no 1RM; not the curl, done least), and a
+    // single chart, for the first one.
     expect(
-      await screen.findByLabelText(/^Barbell Bench Press went up from 116\.7\skg to 128\.3\skg/),
+      await screen.findByLabelText(
+        /^Barbell Bench Press went up from 116\.7\skg to 128\.3\skg/,
+        {},
+        slow,
+      ),
     ).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Current: 128\.3\skg$/)).toBeOnTheScreen();
     for (const name of ['Deadlift', 'Back Squat', 'Barbell Row', 'Overhead Press']) {
-      expect(screen.getByLabelText(new RegExp(`^${name} went up from `))).toBeOnTheScreen();
+      expect(screen.getByRole('togglebutton', { name })).toBeOnTheScreen();
+      expect(screen.queryByLabelText(new RegExp(`^${name} went up from `))).not.toBeOnTheScreen();
     }
-    expect(screen.queryByText('Barbell Curl')).not.toBeOnTheScreen();
+    expect(screen.queryByRole('togglebutton', { name: 'Barbell Curl' })).not.toBeOnTheScreen();
 
-    // Choosing: a sixth is refused; untick one, then the curl fits.
-    await fireEvent.press(screen.getByRole('button', { name: en.stats.chooseExercises }));
+    // Another chip, the same chart.
+    await fireEvent.press(screen.getByRole('togglebutton', { name: 'Deadlift' }));
+    expect(screen.getByLabelText(/^Deadlift went up from /)).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Barbell Bench Press went up from /)).not.toBeOnTheScreen();
+  });
+
+  it('strength: the choice kept on the phone; one workout is not enough for a line', async () => {
+    await strengthWorkouts();
+    await AsyncStorage.setItem(
+      storageKeys.strengthExercises(TEST_USER_ID),
+      JSON.stringify(['curl', 'bench']),
+    );
+    await renderApp('/stats');
+
+    expect(
+      await screen.findByRole('togglebutton', { name: 'Barbell Curl' }, slow),
+    ).toBeOnTheScreen();
+    expect(screen.queryByRole('togglebutton', { name: 'Deadlift' })).not.toBeOnTheScreen();
+    expect(await screen.findByText(en.stats.empty, {}, slow)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('togglebutton', { name: 'Barbell Bench Press' }));
+    expect(screen.getByLabelText(/^Barbell Bench Press went up from /)).toBeOnTheScreen();
+  });
+
+  it('workouts per muscle group, the most trained first', async () => {
+    await saveWorkout('w1', daysAgo(5), [
+      { exercise: 'bench', weight: 100, reps: 5 },
+      { exercise: 'deadlift', weight: 150, reps: 5 },
+      { exercise: 'plank', seconds: 60 },
+    ]);
+    await saveWorkout('w2', daysAgo(3), [{ exercise: 'bench', weight: 100, reps: 5 }]);
+    await renderApp('/stats');
+
+    // Each row is labelled, and so is its bar: one label per row is enough here.
+    const rows = (await screen.findAllByLabelText(/^(Chest|Back|Core): \d workouts?$/, {}, slow))
+      .map((row) => row.props.accessibilityLabel as string)
+      .filter((label, index, all) => all.indexOf(label) === index);
+    expect(rows).toEqual(['Chest: 2 workouts', 'Back: 1 workout', 'Core: 1 workout']);
+  });
+
+  it('deleting a workout refreshes the statistics', async () => {
+    await saveWorkout('w1', daysAgo(9), [{ exercise: 'bench', weight: 100, reps: 5 }], null);
+    await saveWorkout('w2', daysAgo(2), [{ exercise: 'bench', weight: 100, reps: 6 }], null);
+    await renderApp('/stats');
+    expect(await screen.findAllByLabelText('Chest: 2 workouts', {}, slow)).not.toHaveLength(0);
+
+    // Menu → Profile → the latest workout → Delete.
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.profile }));
+    await fireEvent.press(await screen.findByRole('button', { name: /^Open w2, / }));
+    await fireEvent.press(await screen.findByRole('button', { name: en.workout.delete }));
+    await fireEvent.press(screen.getByRole('button', { name: en.workout.deleteConfirm }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /^Open w2, / })).not.toBeOnTheScreen(),
+    );
+
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
+    await fireEvent.press(screen.getByRole('button', { name: en.nav.stats }));
+    expect(await screen.findAllByLabelText('Chest: 1 workout', {}, slow)).not.toHaveLength(0);
+  });
+
+  it('a new athlete gets useful empty states', async () => {
+    await renderApp('/stats');
+    expect(await screen.findAllByText(en.stats.empty, {}, slow)).toHaveLength(2);
+    expect(screen.getByText(en.stats.strengthNone)).toBeOnTheScreen();
+  });
+  // Last in the file: coming back from the chooser leaves the test navigator mid-transition.
+  it('strength: the athlete chooses up to 5 exercises in the library', async () => {
+    await strengthWorkouts();
+    await renderApp('/stats');
+    await fireEvent.press(
+      await screen.findByRole('button', { name: en.stats.chooseExercises }, slow),
+    );
     await screen.findByRole('header', { name: en.strengthPicker.title });
+    // Starts from the 5 done most.
     expect(screen.getByText('5 of 5 chosen')).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: /^Barbell Bench Press, / })).toBeChecked();
 
+    // A sixth is refused; untick one, then the curl fits.
     await fireEvent.press(screen.getByRole('checkbox', { name: /^Barbell Curl, / }));
     expect(screen.getByText(en.strengthPicker.limit)).toBeOnTheScreen();
     expect(screen.getByRole('checkbox', { name: /^Barbell Curl, / })).not.toBeChecked();
@@ -407,62 +486,15 @@ describe('the Statistics screen', () => {
       ).toEqual(['bench', 'deadlift', 'squat', 'row', 'curl']),
     );
 
+    // Back on Statistics: the chips and the request follow the choice.
     await fireEvent.press(screen.getByRole('button', { name: en.strengthPicker.done }));
-    // The curl has one workout: not enough for a line yet.
-    expect(await screen.findByText('Barbell Curl')).toBeOnTheScreen();
-    expect(screen.queryByLabelText(/^Overhead Press went up/)).not.toBeOnTheScreen();
-    expect(supabaseMock.rpc).toHaveBeenCalledWith('one_rep_max_series', {
-      p_exercise_ids: ['bench', 'deadlift', 'squat', 'row', 'curl'],
-      p_from: statsRangeStart('3m', today),
-    });
-  });
-
-  it('volume per week and per muscle group', async () => {
-    await saveWorkout('w1', daysAgo(3), [
-      { exercise: 'bench', weight: 100, reps: 5 },
-      { exercise: 'deadlift', weight: 150, reps: 5 },
-      { exercise: 'plank', seconds: 60 },
-    ]);
-    await renderApp('/stats');
-    expect(await screen.findByLabelText(/^Back: 750\skg, 1 set$/)).toBeOnTheScreen();
-    expect(screen.getByLabelText(/^Chest: 500\skg, 1 set$/)).toBeOnTheScreen();
-    expect(screen.getByLabelText(/^Core: 0\skg, 1 set$/)).toBeOnTheScreen();
-    expect(
-      screen.getByLabelText(/^Total volume per week stayed at 1,250\skg, in the last 3 months\.$/),
-    ).toBeOnTheScreen();
-  });
-
-  it('deleting a workout refreshes the statistics', async () => {
-    addTemplate('push-a', 'Push A', ['bench']);
-    await saveWorkout('w1', daysAgo(9), [{ exercise: 'bench', weight: 100, reps: 5 }], 'push-a');
-    await saveWorkout('w2', daysAgo(2), [{ exercise: 'bench', weight: 100, reps: 6 }], 'push-a');
-    await renderApp('/stats');
-    expect(
-      await screen.findByRole('button', { name: /^Push A, 2 times, last on / }),
-    ).toBeOnTheScreen();
-
-    // Menu → Profile → the latest workout → Delete.
-    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
-    await fireEvent.press(screen.getByRole('button', { name: en.nav.profile }));
-    const [latest] = await screen.findAllByRole('button', { name: /^Open Push A, / });
-    await fireEvent.press(latest!);
-    await fireEvent.press(await screen.findByRole('button', { name: en.workout.delete }));
-    await fireEvent.press(screen.getByRole('button', { name: en.workout.deleteConfirm }));
+    expect(await screen.findByRole('togglebutton', { name: 'Barbell Curl' })).toBeOnTheScreen();
+    expect(screen.queryByRole('togglebutton', { name: 'Overhead Press' })).not.toBeOnTheScreen();
     await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: /^Open Push A, / })).toHaveLength(1),
+      expect(supabaseMock.rpc).toHaveBeenCalledWith('one_rep_max_series', {
+        p_exercise_ids: ['bench', 'deadlift', 'squat', 'row', 'curl'],
+        p_from: statsRangeStart('3m', today),
+      }),
     );
-
-    await fireEvent.press(screen.getByRole('button', { name: en.nav.openMenu }));
-    await fireEvent.press(screen.getByRole('button', { name: en.nav.stats }));
-    expect(
-      await screen.findByRole('button', { name: /^Push A, 1 time, last on / }),
-    ).toBeOnTheScreen();
-  });
-
-  it('a new athlete gets useful empty states', async () => {
-    await renderApp('/stats');
-    expect(await screen.findByText(en.stats.topWorkoutsEmpty)).toBeOnTheScreen();
-    await waitFor(() => expect(screen.getAllByText(en.stats.empty)).toHaveLength(3));
-    expect(screen.getByText(en.stats.strengthNone)).toBeOnTheScreen();
   });
 });

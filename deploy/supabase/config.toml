@@ -1,0 +1,31 @@
+# Auth settings for the ONLINE project only: sign-in by 6-digit code. Pushed with
+# `npm run auth:push` (supabase config push --workdir deploy), checked with `npm run auth:diff`.
+# See docs/deploy.md.
+#
+# Why a separate file: `config push` sends every property its config.toml declares, and
+# supabase/config.toml describes the LOCAL stack (site_url on 127.0.0.1, ports, storage, a rate
+# limit that needs custom SMTP...). This file declares only what the app needs online; everything
+# else in the project stays as it is.
+#
+# Keep these values the same as in supabase/config.toml. The email template is the same file
+# for both (supabase/templates/sign-in-code.html).
+
+project_id = "treker-online"
+
+[auth.email]
+# 6-digit code, valid for 10 minutes, at most one email per minute per address.
+otp_length = 6
+otp_expiry = 600
+max_frequency = "60s"
+
+# Sign-in by code: new accounts get the confirmation template, existing ones the magic link
+# template. Both show the code ({{ .Token }}) instead of a link. The CLI only reads files inside
+# deploy/, so the scripts copy supabase/templates/sign-in-code.html to deploy/supabase/templates/
+# (not committed) before each diff or push: the template has a single source.
+[auth.email.template.confirmation]
+subject = "Treker: your sign-in code / o teu código de acesso"
+content_path = "./supabase/templates/sign-in-code.html"
+
+[auth.email.template.magic_link]
+subject = "Treker: your sign-in code / o teu código de acesso"
+content_path = "./supabase/templates/sign-in-code.html"

@@ -483,6 +483,11 @@ npm run db:reset   # recria a base de dados: migrações + seed
 npm run db:test    # corre os testes pgTAP em supabase/tests
 npm run db:types   # gera src/lib/supabase/database.types.ts
 npm run db:stop    # para o Supabase local
+
+# Projeto online (ver deploy.md)
+npm run db:link    # liga a CLI ao projeto online, uma vez
+npm run db:diff    # compara o local com o online (só lê)
+npm run db:push    # aplica no online as migrações em falta
 ```
 
 O Studio local fica em http://127.0.0.1:54323.

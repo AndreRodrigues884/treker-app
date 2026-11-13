@@ -2,6 +2,8 @@ import type { Messages } from './en';
 
 export const pt: Messages = {
   common: {
+    localBadge: 'LOCAL',
+    localBadgeLabel: 'Ligado ao Supabase local',
     loading: 'A carregar',
     back: 'Voltar',
     next: 'Seguinte',

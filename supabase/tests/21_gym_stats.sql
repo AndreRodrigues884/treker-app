@@ -184,10 +184,12 @@ select throws_ok(
 -- volume_by_muscle_group -------------------------------------------------------------------------
 
 select results_eq(
-  $$ select muscle_group::text, volume_kg, set_count
+  $$ select muscle_group::text, workout_count, volume_kg, set_count
      from public.volume_by_muscle_group('2026-09-01', '2026-09-30') $$,
-  $$ values ('chest', 3025::numeric, 4), ('back', 750::numeric, 1), ('core', 0::numeric, 3) $$,
-  'volume_by_muscle_group: the volume per muscle group, the largest first, without deleted sets'
+  $$ values ('chest', 4, 3025::numeric, 4), ('core', 3, 0::numeric, 3),
+            ('back', 1, 750::numeric, 1) $$,
+  'volume_by_muscle_group: workouts, volume and sets per muscle group, the most trained first, '
+  'without deleted sets'
 );
 
 -- template_usage -----------------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/features/auth/auth-provider';
 import { RootNavigator } from '@/features/auth/root-navigator';
 import { SplashController } from '@/features/auth/splash-controller';
+import { EnvironmentBadge } from '@/features/dev/environment-badge';
 import { IntroProvider } from '@/features/intro/intro-state';
 import { OfflineBanner } from '@/features/network/offline-banner';
 import { createQueryClient, setUpQueryManagers } from '@/lib/data/query-client';
@@ -35,6 +36,7 @@ export default function RootLayout() {
               <SplashController fontsReady={fontsReady} />
               {fontsReady && <RootNavigator />}
               <OfflineBanner />
+              <EnvironmentBadge />
             </AuthProvider>
           </IntroProvider>
         </LanguageProvider>

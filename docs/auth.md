@@ -161,15 +161,32 @@ Se não houver rede, a conta **não** é apagada: aparece o erro e o atleta pode
 
 ## Configuração
 
-As variáveis ficam num `.env` na raiz, que não vai para o git. Copia o [`.env.example`](../.env.example):
+Há dois ambientes, cada um com o seu ficheiro na raiz, fora do git. Copia o exemplo e preenche:
+
+| Ficheiro | Supabase | Exemplo |
+| --- | --- | --- |
+| `.env.development` | O local (Docker), para desenvolver | [`.env.development.example`](../.env.development.example) |
+| `.env.production` | O projeto online (região UE) | [`.env.production.example`](../.env.production.example) |
 
 ```bash
-EXPO_PUBLIC_SUPABASE_URL=http://192.168.1.69:54321
+EXPO_PUBLIC_SUPABASE_URL=http://192.168.1.69:54321        # online: https://<ref>.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-- **A chave é a pública.** Usa o `PUBLISHABLE_KEY` de `npx supabase status`, o novo nome da chave anon. Tudo o que está em variáveis `EXPO_PUBLIC_` vai dentro da app, por isso **nunca** se põe aqui a chave secreta nem a `service_role`.
-- **O URL usa o IP do PC na rede local**, não `127.0.0.1`. No telemóvel, `127.0.0.1` é o próprio telemóvel.
+**Escolher o ambiente ao arrancar:**
+
+```bash
+npm start            # Supabase local
+npm run start:prod   # Supabase online
+```
+
+- Os dois arrancam o servidor em modo de desenvolvimento (fast refresh, logs). O script `scripts/use-env.js` copia o ficheiro escolhido para `.env.local`, que o Expo lê antes de todos os outros. Por isso arranca sempre com estes scripts, e não com `npx expo start` diretamente, que usaria o último `.env.local` gerado.
+- Não se usa `npx expo start --no-dev` para o online: o SDK 58 só lê o `.env.production` em modo de produção, que desliga o fast refresh e os logs.
+- As variáveis `EXPO_PUBLIC_` são lidas no arranque. Para trocar de ambiente, para o servidor e arranca com o outro script. Se a app continuar ligada ao anterior, arranca com a cache limpa: `npm start -- --clear` ou `npm run start:prod -- --clear`.
+- **Etiqueta "LOCAL":** em desenvolvimento, enquanto a app fala com o Supabase local, aparece uma etiqueta discreta no canto superior direito (`src/features/dev/environment-badge.tsx`). Ligada ao projeto online, não aparece. Quem decide é o URL (`src/lib/supabase/target.ts`): `*.supabase.co` é o online, o resto é o local.
+- O `.env` antigo continua a ser lido, com menos prioridade. Pode ficar só com o que não é da app (por exemplo, a password do projeto para a CLI); as variáveis `EXPO_PUBLIC_` passam para os ficheiros de cada ambiente.
+- **A chave é a pública.** Usa o `PUBLISHABLE_KEY` de `npx supabase status` (local) ou da página API Keys do projeto (online). Tudo o que está em variáveis `EXPO_PUBLIC_` vai dentro da app, por isso **nunca** se põe aqui a chave secreta nem a `service_role`.
+- **No local, o URL usa o IP do PC na rede local**, não `127.0.0.1`. No telemóvel, `127.0.0.1` é o próprio telemóvel.
 
 ### Descobrir o IP do PC no Windows
 
@@ -187,7 +204,7 @@ Ou diretamente:
 Get-NetIPConfiguration | Where-Object IPv4DefaultGateway | Select-Object InterfaceAlias, IPv4Address
 ```
 
-O IP pode mudar quando mudas de rede ou o router reinicia. Se o login deixar de funcionar, confirma o IP e atualiza o `.env`, e depois reinicia o `npx expo start`: as variáveis `EXPO_PUBLIC_` são lidas no arranque.
+O IP pode mudar quando mudas de rede ou o router reinicia. Se o login deixar de funcionar, confirma o IP e atualiza o `.env.development`, e depois reinicia o `npm start`: as variáveis `EXPO_PUBLIC_` são lidas no arranque.
 
 ## Ler os códigos em desenvolvimento
 
