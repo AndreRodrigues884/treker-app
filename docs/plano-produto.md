@@ -56,7 +56,7 @@ Sai tudo o que não muda nada na app ou que mostra números enganadores.
 | --- | --- |
 | Objetivos de treino no onboarding | São guardados e editáveis, mas não alteram nada no resto da app; só atrasam a entrada |
 | "Força Total" | Soma o 1RM de todos os exercícios: sobe sempre que se acrescenta um exercício, mesmo sem ficar mais forte. Substituída pela evolução de 3 a 5 exercícios escolhidos pelo atleta |
-| Toggle de notificações sem notificações | Um botão que não faz nada tira confiança; volta com o temporizador de descanso |
+| Toggle de notificações sem notificações | Um botão que não faz nada tira confiança. Sem notificações na v1 (o temporizador de descanso também saiu) |
 | Altura no perfil | Não entra em nenhum cálculo |
 | Corrida na v1 | Entra depois de validar Gym e Natação (ver critério acima) |
 | Marcos de volume em destaque | Ficam discretos nas conquistas; os atletas valorizam PRs, não totais acumulados |
@@ -69,7 +69,7 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 | Funcionalidade | Área | Prioridade | Porquê |
 | --- | --- | --- | --- |
 | ~~Offline-first: base local (SQLite) com sincronização e sem duplicados~~ **Adiado (fora da v1)**: a v1 funciona só com rede | Base | — | Ginásios em caves e piscinas têm rede fraca; volta depois de validar a v1 (ver docs/data-access.md, "Voltar ao offline") |
-| Temporizador de descanso com notificação no ecrã bloqueado | Gym | P0 | Das funções mais usadas; mantém a app aberta durante o treino |
+| ~~Temporizador de descanso com notificação no ecrã bloqueado~~ **Fora da v1 (decisão de nov. 2026)** | Gym | — | Saiu da v1, com as notificações: a app não pede essa permissão. O código antigo está no histórico do git, se voltar |
 | ~~Séries de aquecimento fora das estatísticas~~ **Adiado na sessão (fora da v1)** | Gym | — | A sessão não tem aquecimentos: o atleta regista só as séries de trabalho. A base de dados continua a suportar `is_warmup` (fora do volume, 1RM e PRs), para voltar mais tarde |
 | Histórico em calendário com Gym e Natação juntos | Base | P0 | É a vista que mostra o diferencial multi-modalidade |
 | ~~Notas por sessão~~ **Adiado (fora da v1)** | Gym, Natação | — | Explicaria um dia mau nos gráficos meses depois, mas não é necessário por agora. A coluna `activities.notes` fica na base de dados, vazia, para ser fácil voltar a ter notas |

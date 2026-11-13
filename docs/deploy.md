@@ -339,6 +339,91 @@ O **Pro** (cerca de 25 dólares por mês):
   1. carrega o `roles.sql`, depois o `schema.sql`, e por fim o `data.sql`, com `psql`;
   2. abre a app contra essa cópia.
 
+## A app no telemóvel (APK, sem o Expo Go)
+
+Uma build nativa do Treker para Android, instalada como uma app normal: não precisa do Expo Go nem do PC, e fala com o Supabase online. É feita na cloud pelo **EAS Build**.
+
+| Ficheiro | O que tem |
+| --- | --- |
+| [`eas.json`](../eas.json) | O perfil `preview`: um APK para instalação direta (`distribution: internal`, `android.buildType: apk`), com as variáveis do ambiente **preview** do EAS. O perfil `production` fica pronto para a Play Store (AAB, número de versão aumentado sozinho) |
+| [`app.json`](../app.json) | O nome `Treker`, o ícone e o splash com o logótipo e as cores atuais, e o identificador Android `app.treker` |
+
+- **O identificador `app.treker` não se muda depois de publicar na Play Store.** Uma app com outro identificador é outra app. Foi escolhido a contar com o domínio `treker.app` ([Antes dos testers](#1-domínio)).
+- **O ícone e o splash** vêm de [`assets/brand/treker-logo.svg`](../assets/brand/treker-logo.svg) (`npm run brand:icons`): fundo `#070D1C`, e o ícone adaptativo do Android com versão monocromática.
+- **Permissões:** a app declara só a internet. Não tem notificações na v1: a dependência `expo-notifications` foi removida, e nenhuma biblioteca da build declara `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` ou alarmes exatos. As permissões antigas de armazenamento, que o Expo junta por defeito, estão bloqueadas em `android.blockedPermissions`, porque a app não as usa.
+
+### As variáveis do Supabase, sem as pôr no git
+
+O EAS Build envia para a cloud só os ficheiros que o git conhece: os `.env*` (que estão no `.gitignore`) não vão. As variáveis `EXPO_PUBLIC_` vêm das **variáveis de ambiente do EAS**, guardadas no projeto da Expo. O perfil `preview` usa o ambiente `preview` (`"environment": "preview"` no `eas.json`).
+
+Para as copiar do teu `.env.production` (o URL do projeto e a chave publishable, que são públicos):
+
+```bash
+npx eas-cli@latest env:push preview --path .env.production
+npx eas-cli@latest env:list --environment preview    # confere: as duas EXPO_PUBLIC_
+```
+
+Ou uma a uma:
+
+```bash
+npx eas-cli@latest env:set --environment preview --visibility plaintext \
+  --name EXPO_PUBLIC_SUPABASE_URL --value https://<ref>.supabase.co
+npx eas-cli@latest env:set --environment preview --visibility plaintext \
+  --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value sb_publishable_...
+```
+
+- Usa `plaintext`, e não `secret`: as variáveis `EXPO_PUBLIC_` vão dentro da app, e os valores secretos nunca saem dos servidores da Expo. Nunca se põe aqui a chave secreta nem a `service_role`.
+- Se mudares o URL ou a chave, corre outra vez o `env:push` (com `--force` para substituir) e faz uma build nova. As variáveis ficam dentro do APK quando ele é feito.
+
+### Fazer a build (os comandos que corres)
+
+```bash
+npx eas-cli@latest login                                   # a tua conta Expo (cria uma em expo.dev)
+npx eas-cli@latest init                                    # uma vez: cria o projeto na Expo e junta o projectId ao app.json
+npx eas-cli@latest env:push preview --path .env.production # uma vez, e sempre que o URL ou a chave mudarem
+npx eas-cli@latest build --profile preview --platform android
+```
+
+- **Na primeira build**, o EAS pergunta se gera uma *keystore* (a chave que assina a app Android): responde **sim**. Fica guardada na tua conta Expo. Não a percas: a mesma chave assina as versões seguintes.
+- **Quanto demora:** no plano gratuito a build vai para uma fila de baixa prioridade. Normalmente demora 10 a 20 minutos, mas pode esperar mais de 90 minutos nas horas de maior uso. No fim, o comando mostra um link e um QR code. A build também aparece em [expo.dev](https://expo.dev), em **Projects > treker > Builds**.
+- **O `init`** acrescenta ao `app.json` o `extra.eas.projectId` (e o `owner`). Essa alteração vai para o git: é um identificador, não um segredo.
+
+### Instalar o APK no telemóvel
+
+1. No telemóvel Android, abre o link da build (ou lê o QR code do terminal). Também o encontras na página da build em expo.dev, com o botão **Install**.
+2. Descarrega o APK.
+3. Abre o ficheiro. O Android pede para **permitir instalar apps desta origem** (o browser ou o gestor de ficheiros), porque a app não vem da Play Store: permite-o só para essa app.
+4. Confirma o aviso de segurança ("app não verificada pela Play Store") e instala.
+5. Abre o **Treker** a partir do ecrã principal. Funciona com o PC desligado e com dados móveis.
+
+Para uma versão nova: faz outra build com o mesmo comando e instala o APK por cima. Os dados ficam, porque o identificador e a chave de assinatura são os mesmos.
+
+Alternativa com cabo: ativa a depuração USB no telemóvel, descarrega o APK no PC e corre `adb install treker.apk`.
+
+### O que funciona fora do Expo Go
+
+Confirmado nas dependências e na configuração nativa (`npx expo-doctor`: 20 de 20 verificações, e `npx expo config --type prebuild` sem erros):
+
+| Funcionalidade | Na build |
+| --- | --- |
+| **Notificações** | Não existem na v1 (o temporizador de descanso saiu). A app não as pede, e o APK não declara as permissões |
+| **Ecrã aceso durante a sessão** | `expo-keep-awake`, um módulo nativo incluído na build |
+| **Data e hora** (editar um treino) | Campos de texto, sem seletor nativo. Não dependem de nenhum módulo |
+| **Gráficos** | `react-native-gifted-charts`, que desenha com `react-native-svg` e `expo-linear-gradient`, ambos incluídos na build |
+| **Login, sessão e dados** | `expo-secure-store` (a sessão), AsyncStorage, NetInfo, gestos e animações (`react-native-gesture-handler`, `react-native-reanimated`): todos com código nativo incluído na build |
+
+- **Na build não há modo de desenvolvimento.** O catálogo de componentes (`/dev`) fica fechado e a etiqueta "LOCAL" nunca aparece.
+- **A app fala sempre com o Supabase online.** É o que está nas variáveis do ambiente `preview`.
+
+### Limites do plano gratuito da Expo
+
+- **15 builds Android e 15 iOS por mês**, que se renovam todos os meses ([preços](https://expo.dev/pricing)).
+- Fila de baixa prioridade, e cada build pode durar até 45 minutos.
+
+Para não gastar builds sem necessidade:
+- testa as mudanças primeiro com o Expo Go (`npm run start:prod`);
+- faz uma build só quando quiseres a versão instalada atualizada.
+
 ## CI (GitHub Actions)
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) corre em cada push e pull request, com dois jobs em paralelo:

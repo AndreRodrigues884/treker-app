@@ -6,7 +6,6 @@ import { en } from '@/core/i18n/en';
 import { resetSessionStore } from '@/features/session/session-store';
 import { storageKeys } from '@/lib/storage';
 
-import { scheduled, resetNotifications } from '../../test-utils/notifications-mock';
 import { renderApp, resetStorage } from '../../test-utils/render-app';
 import { dragEndParams } from '../../test-utils/sortables-mock';
 import {
@@ -26,7 +25,6 @@ const nbsp = (text: string) => text.replace(/ (?=kg)/g, ' ');
 
 beforeEach(async () => {
   resetSessionStore();
-  resetNotifications();
   resetSupabaseMock({ signedIn: true, profile: onboardedProfile({ weekly_target: 3 }) });
   seedLibraryExercises([
     { id: 'bench', name_en: 'Barbell Bench Press', name_pt: 'Supino plano com barra' },
@@ -172,10 +170,8 @@ describe('a gym session from start to the Profile', () => {
     ).toBeOnTheScreen();
     expect(screen.getByLabelText('1 of 3 sets done')).toBeOnTheScreen();
 
-    // No rest timer for now: nothing on screen, no question, no alert.
+    // No rest timer in v1: nothing on screen after a set.
     expect(screen.queryByLabelText(/^Rest: /)).not.toBeOnTheScreen();
-    expect(screen.queryByText(s.permissionBody)).not.toBeOnTheScreen();
-    expect(scheduled.size).toBe(0);
 
     // The draft is on the phone the whole time.
     expect((await storedDraft()).exercises[0].sets[0]).toMatchObject({

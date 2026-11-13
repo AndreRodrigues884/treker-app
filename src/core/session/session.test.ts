@@ -1,7 +1,5 @@
 import {
   addExercises,
-  adjustRest,
-  DEFAULT_REST_S,
   doneCount,
   elapsedS,
   hasDoneSets,
@@ -13,7 +11,6 @@ import {
   planOf,
   removeExercise,
   reorderExercises,
-  restRemainingS,
   saveEditedSet,
   saveSet,
   sessionFromWorkout,
@@ -23,7 +20,6 @@ import {
   setProblem,
   setSessionTitle,
   setSessionWhen,
-  skipRest,
   startSession,
   toSavePayload,
   toUpdatePayload,
@@ -179,7 +175,7 @@ describe('the exercise plan', () => {
     let session = pushDay();
     const key = benchKey(session);
     const sets = session.exercises[0]!.sets;
-    session = saveSet(session, key, sets[2]!.id, values(), START, {});
+    session = saveSet(session, key, sets[2]!.id, values(), {});
     expect(minPlanSets(session.exercises[0]!)).toBe(1);
 
     session = setExercisePlan(session, key, { setCount: 1, reps: 8, seconds: null }, ids('new'));
@@ -215,50 +211,31 @@ describe('editing the workout', () => {
 });
 
 describe('saving a set ("OK")', () => {
-  it('keeps the values and how hard it felt, marks it done and starts the rest', () => {
+  it('keeps the values and how hard it felt, and marks it done', () => {
     const session = pushDay();
     const id = setAt(session, 0, 0).id;
-    const saved = saveSet(
-      session,
-      benchKey(session),
-      id,
-      values({ difficulty: 'medium' }),
-      START,
-      {},
-    );
+    const saved = saveSet(session, benchKey(session), id, values({ difficulty: 'medium' }), {});
     expect(setAt(saved, 0, 0)).toMatchObject({
       weight: 100,
       reps: 5,
       difficulty: 'medium',
       done: true,
     });
-    expect(saved.rest).toEqual({
-      endsAt: new Date(START.getTime() + DEFAULT_REST_S * 1000).toISOString(),
-      durationS: DEFAULT_REST_S,
-    });
   });
 
-  it('editing a done set does not start the rest again', () => {
+  it('a done set can be changed again', () => {
     let session = pushDay();
     const key = benchKey(session);
     const id = setAt(session, 0, 0).id;
-    session = skipRest(saveSet(session, key, id, values(), START, {}));
-    session = saveSet(session, key, id, values({ difficulty: 'easy' }), START, {});
-    expect(setAt(session, 0, 0).difficulty).toBe('easy');
-    expect(session.rest).toBeNull();
+    session = saveSet(session, key, id, values(), {});
+    session = saveSet(session, key, id, values({ difficulty: 'easy' }), {});
+    expect(setAt(session, 0, 0)).toMatchObject({ difficulty: 'easy', done: true });
   });
 
   it('only done sets count in the totals', () => {
     let session = pushDay();
     const key = benchKey(session);
-    session = saveSet(
-      session,
-      key,
-      setAt(session, 0, 0).id,
-      values({ weight: 100, reps: 6 }),
-      START,
-      {},
-    );
+    session = saveSet(session, key, setAt(session, 0, 0).id, values({ weight: 100, reps: 6 }), {});
     expect(hasDoneSets(session)).toBe(true);
     expect(sessionSummary(session)).toEqual({
       setCount: 1,
@@ -283,11 +260,11 @@ describe('live records', () => {
     const key = benchKey(session);
     const [first, second] = session.exercises[0]!.sets;
     // 97.5 x 6 = 117 kg estimated; the record is 120.
-    session = saveSet(session, key, first!.id, values({ weight: 97.5, reps: 6 }), START, {
+    session = saveSet(session, key, first!.id, values({ weight: 97.5, reps: 6 }), {
       bench: 120,
     });
     expect(setAt(session, 0, 0).pr).toBe(false);
-    session = saveSet(session, key, second!.id, values({ weight: 110, reps: 5 }), START, {
+    session = saveSet(session, key, second!.id, values({ weight: 110, reps: 5 }), {
       bench: 120,
     });
     expect(setAt(session, 0, 1).pr).toBe(true);
@@ -297,22 +274,15 @@ describe('live records', () => {
     let session = pushDay();
     const key = benchKey(session);
     const [first, second] = session.exercises[0]!.sets;
-    session = saveSet(session, key, first!.id, values(), START, {});
-    session = saveSet(session, key, second!.id, values(), START, {});
+    session = saveSet(session, key, first!.id, values(), {});
+    session = saveSet(session, key, second!.id, values(), {});
     expect([setAt(session, 0, 0).pr, setAt(session, 0, 1).pr]).toEqual([true, false]);
   });
 
   it('sets above 12 reps never count', () => {
     let session = pushDay();
     const key = benchKey(session);
-    session = saveSet(
-      session,
-      key,
-      setAt(session, 0, 0).id,
-      values({ weight: 200, reps: 13 }),
-      START,
-      {},
-    );
+    session = saveSet(session, key, setAt(session, 0, 0).id, values({ weight: 200, reps: 13 }), {});
     expect(setAt(session, 0, 0).pr).toBe(false);
   });
 
@@ -332,7 +302,7 @@ describe('live progress (finish screen)', () => {
     const key = benchKey(session);
     const [first, second] = session.exercises[0]!.sets;
     // Last time: best 97.5 x 6 = 117 kg. Today 100 x 5 = 116.67: less than 0.5% lower.
-    session = saveSet(session, key, first!.id, values(), START, {});
+    session = saveSet(session, key, first!.id, values(), {});
     expect(liveProgress(session, session.exercises[0]!)).toEqual({
       measure: 'one_rep_max',
       current: 116.67,
@@ -340,7 +310,7 @@ describe('live progress (finish screen)', () => {
       result: 'same',
     });
     // 105 x 5 = 122.5: up.
-    session = saveSet(session, key, second!.id, values({ weight: 105 }), START, {});
+    session = saveSet(session, key, second!.id, values({ weight: 105 }), {});
     expect(liveProgress(session, session.exercises[0]!)?.result).toBe('up');
   });
 
@@ -353,7 +323,6 @@ describe('live progress (finish screen)', () => {
       plankKey,
       setAt(session, 1, 0).id,
       values({ weight: null, reps: null, seconds: 50 }),
-      START,
       {},
     );
     expect(liveProgress(session, session.exercises[1]!)).toEqual({
@@ -365,28 +334,7 @@ describe('live progress (finish screen)', () => {
   });
 });
 
-describe('rest timer', () => {
-  const rested = () => {
-    const session = pushDay();
-    return saveSet(session, benchKey(session), setAt(session, 0, 0).id, values(), START, {});
-  };
-
-  it('works from the end time, so it is right after the app was in the background', () => {
-    const session = rested();
-    expect(restRemainingS(session.rest, START)).toBe(90);
-    expect(restRemainingS(session.rest, new Date(START.getTime() + 61_500))).toBe(29);
-    expect(restRemainingS(session.rest, new Date(START.getTime() + 120_000))).toBe(0);
-  });
-
-  it('adjusts by ±15 s (never below zero) and can be skipped', () => {
-    let session = adjustRest(rested(), 15, START);
-    expect(restRemainingS(session.rest, START)).toBe(105);
-    expect(session.restDurationS).toBe(105);
-    session = adjustRest(session, -15, new Date(START.getTime() + 100_000));
-    expect(restRemainingS(session.rest, new Date(START.getTime() + 100_000))).toBe(0);
-    expect(skipRest(session).rest).toBeNull();
-  });
-
+describe('elapsed time', () => {
   it('counts the elapsed time from the start', () => {
     expect(elapsedS(pushDay(), new Date(START.getTime() + 1500_000))).toBe(1500);
   });
@@ -402,7 +350,6 @@ describe('saving the workout', () => {
       key,
       sets[1]!.id,
       values({ weight: 225, reps: 5, difficulty: 'hard' }),
-      START,
       {},
     );
     session = addExercises(session, [plank], {}, ids('plank'));
@@ -412,7 +359,6 @@ describe('saving the workout', () => {
       session.exercises[2]!.key,
       plankSet.id,
       { weight: null, reps: null, seconds: 30, difficulty: null },
-      START,
       {},
     );
     session = setSessionTitle(session, '  Push A ');
@@ -524,7 +470,6 @@ describe('editing a saved workout', () => {
       title: 'Push A',
       localDate: '2026-11-01',
       startedAt: '2026-11-01T09:00:00.000Z',
-      rest: null,
     });
     expect(session.exercises.map((e) => [e.id, e.sets.map((s) => s.id)])).toEqual([
       ['bench', ['b1', 'b2']],
@@ -587,7 +532,7 @@ describe('editing a saved workout', () => {
     expect(payload.sets.map((s) => s.id)).not.toContain('p1');
   });
 
-  it('a set edited while editing gets no rest timer and no live seal', () => {
+  it('a set edited while editing gets no live seal', () => {
     const session = workout();
     const edited = saveEditedSet(session, session.exercises[0]!.key, 'b1', {
       weight: 400,
@@ -595,7 +540,6 @@ describe('editing a saved workout', () => {
       seconds: null,
       difficulty: null,
     });
-    expect(edited.rest).toBeNull();
     expect(edited.exercises[0]!.sets[0]!.pr).toBe(false);
   });
 });

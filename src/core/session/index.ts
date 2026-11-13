@@ -1,5 +1,5 @@
-// The gym session in progress: its state, sets, totals, live records and rest timer, and the
-// request that saves it (Postgres save_gym_session). Pure TypeScript.
+// The gym session in progress: its state, sets, totals and live records, and the request that
+// saves it (Postgres save_gym_session). Pure TypeScript. There is no rest timer in v1.
 //
 // The session is a draft kept on the phone until the athlete taps "Finish"; only then is it sent,
 // in one request. Weights are kept as typed, in the athlete's unit, and converted to kg
@@ -16,12 +16,6 @@ import { estimateOneRepMax } from '../records';
 import { fromKilograms, toKilograms, type WeightUnit } from '../units';
 
 export const SESSION_VERSION = 1;
-
-// Rest timer: 90 s by default, ±15 s a tap, between 15 s and 10 min.
-export const DEFAULT_REST_S = 90;
-export const REST_STEP_S = 15;
-export const MIN_REST_S = 15;
-export const MAX_REST_S = 600;
 
 // How hard a set felt (gym_sets.difficulty).
 export const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
@@ -88,8 +82,6 @@ export type SessionExercise = ExerciseInfo & {
   last: LastSet[];
 };
 
-export type RestTimer = { endsAt: string; durationS: number };
-
 export type GymSession = {
   version: typeof SESSION_VERSION;
   // activities.id, made on the phone.
@@ -107,10 +99,6 @@ export type GymSession = {
   weightUnit: WeightUnit;
   bodyweightKg: number | null;
   exercises: SessionExercise[];
-  restDurationS: number;
-  rest: RestTimer | null;
-  // The scheduled "rest is over" notification, to cancel it.
-  restNotificationId: string | null;
 };
 
 // Starting --------------------------------------------------------------------------------------
@@ -212,9 +200,6 @@ export function startSession(input: StartSessionInput): GymSession {
     weightUnit: input.weightUnit,
     bodyweightKg: input.bodyweightKg,
     exercises,
-    restDurationS: DEFAULT_REST_S,
-    rest: null,
-    restNotificationId: null,
   };
 }
 
@@ -469,15 +454,13 @@ export function liveProgress(
 /**
  * "OK" on a set: saves what was typed and how hard it felt, and marks it as done. The set gets the
  * PR seal when its estimated 1RM beats both the current record (`recordsKg`, from
- * current_records) and every other set done in this session for the same exercise. Starts the
- * rest timer when the set was not done yet (editing a done set does not).
+ * current_records) and every other set done in this session for the same exercise.
  */
 export function saveSet(
   session: GymSession,
   key: string,
   setId: string,
   values: SetValues,
-  now: Date,
   recordsKg: Readonly<Record<string, number>>,
 ): GymSession {
   const exercise = session.exercises.find((item) => item.key === key);
@@ -488,13 +471,12 @@ export function saveSet(
   const estimate = setOneRepMaxKg(session, exercise, values);
   const pr = estimate !== null && (best === null || estimate > best);
 
-  const updated = mapExercise(session, key, (item) => ({
+  return mapExercise(session, key, (item) => ({
     ...item,
     sets: item.sets.map((current) =>
       current.id === setId ? { ...current, ...values, done: true, pr } : current,
     ),
   }));
-  return set.done ? updated : startRest(updated, now);
 }
 
 // The best 1RM known for an exercise: the record and every other done set of this session.
@@ -514,41 +496,6 @@ function sessionBestKg(
     }
   }
   return best;
-}
-
-// Rest timer -------------------------------------------------------------------------------------
-// The timer keeps its end time, not a countdown, so it is right after the app was in the
-// background or the phone was locked.
-
-export function startRest(session: GymSession, now: Date): GymSession {
-  const endsAt = new Date(now.getTime() + session.restDurationS * 1000).toISOString();
-  return { ...session, rest: { endsAt, durationS: session.restDurationS } };
-}
-
-// ±15 s on the running rest; the new length also becomes the default for the next sets.
-export function adjustRest(session: GymSession, deltaS: number, now: Date): GymSession {
-  if (!session.rest) return session;
-  const remaining = restRemainingS(session.rest, now);
-  const nextRemaining = Math.min(MAX_REST_S, Math.max(0, remaining + deltaS));
-  const durationS = Math.min(MAX_REST_S, Math.max(MIN_REST_S, session.restDurationS + deltaS));
-  return {
-    ...session,
-    restDurationS: durationS,
-    rest: {
-      endsAt: new Date(now.getTime() + nextRemaining * 1000).toISOString(),
-      durationS: Math.max(0, session.rest.durationS + deltaS),
-    },
-  };
-}
-
-export function skipRest(session: GymSession): GymSession {
-  return { ...session, rest: null, restNotificationId: null };
-}
-
-// Whole seconds left, never negative.
-export function restRemainingS(rest: RestTimer | null, now: Date): number {
-  if (!rest) return 0;
-  return Math.max(0, Math.ceil((Date.parse(rest.endsAt) - now.getTime()) / 1000));
 }
 
 export function elapsedS(session: Pick<GymSession, 'startedAt'>, now: Date): number {
@@ -663,7 +610,7 @@ export function toSavePayload(session: GymSession): SaveSessionPayload {
 }
 
 // Editing a saved workout --------------------------------------------------------------------------
-// The same session model, loaded from a saved workout: every set is done, there is no rest timer
+// The same session model, loaded from a saved workout: every set is done
 // and no live PR seal (Postgres rebuilds the records when the changes are saved).
 
 export type SavedSet = {
@@ -742,13 +689,10 @@ export function sessionFromWorkout(input: LoadWorkoutInput): GymSession {
     weightUnit: input.weightUnit,
     bodyweightKg: input.bodyweightKg,
     exercises,
-    restDurationS: DEFAULT_REST_S,
-    rest: null,
-    restNotificationId: null,
   };
 }
 
-// "OK" on a set while editing: its values, done, no rest timer and no live seal.
+// "OK" on a set while editing: its values, done, and no live seal.
 export function saveEditedSet(
   session: GymSession,
   key: string,
@@ -833,10 +777,8 @@ const sessionSchema = z.object({
       ),
     }),
   ),
-  restDurationS: z.number(),
-  rest: z.object({ endsAt: z.string(), durationS: z.number() }).nullable(),
-  restNotificationId: z.string().nullable(),
-  // Drafts from before the end time was dropped have one; it is ignored.
+  // Drafts from before the end time and the rest timer were dropped have more fields: those are
+  // ignored (zod leaves out keys the schema does not list).
   endedAt: z.string().nullable().optional(),
 });
 

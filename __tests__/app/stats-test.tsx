@@ -11,7 +11,6 @@ import { resetStrengthChoice } from '@/features/stats/strength-choice';
 import { getDeviceTimezone } from '@/lib/device';
 import { storageKeys } from '@/lib/storage';
 
-import { resetNotifications } from '../../test-utils/notifications-mock';
 import { renderApp, resetStorage } from '../../test-utils/render-app';
 import {
   onboardedProfile,
@@ -111,7 +110,6 @@ beforeEach(async () => {
   resetSessionStore();
   resetEditStore();
   resetStrengthChoice();
-  resetNotifications();
   resetSupabaseMock({ signedIn: true, profile: onboardedProfile({ weekly_target: 3 }) });
   seedLibraryExercises([
     { id: 'bench', name_en: 'Barbell Bench Press', name_pt: 'Supino plano com barra' },

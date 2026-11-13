@@ -38,8 +38,7 @@ import {
   saveGymSession,
   updateGymSession,
 } from './repository';
-import { cancelRestEnd } from './rest-notifications';
-import { getActiveSession, setActiveSession, updateActiveSession } from './session-store';
+import { setActiveSession, updateActiveSession } from './session-store';
 
 export { exerciseInfo };
 
@@ -111,7 +110,6 @@ export function useStartGymSession() {
 
 /**
  * Everything the session screen does to the draft. Each change is written to the phone at once.
- * There is no rest timer for now.
  */
 export function useSessionActions() {
   const ctx = useDataContext();
@@ -133,20 +131,12 @@ export function useSessionActions() {
       const last = await fetchLast(rows.map((row) => row.id)).catch(() => ({}));
       await change((session) => addExercises(session, rows.map(exerciseInfo), last, ctx.newId));
     },
-    // "OK" on a set: its values and difficulty, done. No rest timer for now (paused): the rest
-    // saveSet would start is dropped.
+    // "OK" on a set: its values and difficulty, done.
     saveSet: (key: string, setId: string, values: SetValues) =>
-      change((session) => ({
-        ...saveSet(session, key, setId, values, ctx.now(), records.data ?? {}),
-        rest: null,
-      })),
+      change((session) => saveSet(session, key, setId, values, records.data ?? {})),
     // Written to the phone at each keystroke, so the title survives the app closing.
     setTitle: (title: string) => change((session) => setSessionTitle(session, title)),
-    // A rest alert from before the timer was paused is still cancelled.
-    discard: async () => {
-      await cancelRestEnd(getActiveSession(ctx.userId)?.restNotificationId ?? null);
-      await setActiveSession(ctx.userId, null);
-    },
+    discard: () => setActiveSession(ctx.userId, null),
   };
 }
 
@@ -161,7 +151,6 @@ export function useSaveGymSession() {
   return useMutation({
     mutationFn: (payload: SaveSessionPayload) => saveGymSession(ctx, payload),
     onSuccess: async (_records, payload) => {
-      await cancelRestEnd(getActiveSession(ctx.userId)?.restNotificationId ?? null);
       await setActiveSession(ctx.userId, null);
       await invalidateWorkoutChange(
         queryClient,

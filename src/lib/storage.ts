@@ -10,7 +10,6 @@ export const storageKeys = {
   language: 'treker.language',
   onboardingDraft: (userId: string) => `treker.onboarding-draft.${userId}`,
   gymSession: (userId: string) => `treker.gym-session.${userId}`,
-  restNotificationsAsked: 'treker.rest-notifications-asked',
   // The exercises the strength chart shows (Statistics), chosen by the athlete.
   strengthExercises: (userId: string) => `treker.strength-exercises.${userId}`,
 } as const;

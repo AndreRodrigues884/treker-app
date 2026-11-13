@@ -100,19 +100,25 @@ flowchart LR
 - **Onde vive:** `src/features/session/session-store.ts`, uma store em memória, gravada em AsyncStorage (`treker.gym-session.<utilizador>`) a cada alteração. Fechar a app, ou o telemóvel matá-la, não perde nada: no arranque seguinte o "Hoje" mostra o cartão "Treino em curso" com "Continuar" e "Descartar".
   - O rascunho é lido com validação (`parseSession` em `src/core/session`), e um rascunho estragado, de outra versão ou de outro utilizador é ignorado.
 - **Um de cada vez:** com um treino em curso, o "+" abre esse treino em vez de começar outro.
-- **Toda a lógica é pura** (`src/core/session`): começar a partir de um treino guardado, pré-preencher com a última vez ou com o alvo, o plano de cada exercício (séries × alvo, o lápis), gravar uma série com "OK" (valores e dificuldade: fácil, médio ou difícil), só as séries feitas contam, PR na hora com `src/core/records`, temporizador e o pedido para o `save_gym_session`. Não há aquecimentos na sessão.
+- **Toda a lógica é pura** (`src/core/session`): começar a partir de um treino guardado, pré-preencher com a última vez ou com o alvo, o plano de cada exercício (séries × alvo, o lápis), gravar uma série com "OK" (valores e dificuldade: fácil, médio ou difícil), só as séries feitas contam, PR na hora com `src/core/records` e o pedido para o `save_gym_session`. Não há aquecimentos na sessão.
 - **No ecrã**, cada exercício mostra um quadrado por série; tocar num abre o painel da série (última vez, peso, reps, dificuldade, Cancelar / OK). Uma série feita fica verde (fácil), amarela (médio) ou vermelha (difícil). Os cartões mudam de ordem arrastando a pega; o leitor de ecrã tem as ações "Subir" e "Descer" nessa pega.
 - **Pesos:** ficam como o atleta os escreve, na unidade do perfil, e são convertidos para kg (`src/core/units`) ao estimar o 1RM e ao gravar.
 - **PR na hora:** ao dar uma série como feita, o 1RM estimado é comparado com o recorde atual em cache e com as séries já feitas nesta sessão. É só uma indicação; os recordes oficiais são os que o `save_gym_session` devolve depois de gravar.
 - **Sem duração:** a app não regista quanto tempo dura o treino. Não há relógio na sessão nem duração no resumo, e o pedido leva `ended_at` vazio. Guarda só a hora de início, que dá a data local e a ordem dos treinos do mesmo dia.
 - **Gravar:** o pedido é feito só a partir do rascunho, por isso "Tentar outra vez" envia exatamente o mesmo pedido, com os mesmos ids, e o servidor não duplica nada. Só com sucesso é que o rascunho é apagado.
-- **Sem temporizador de descanso, por agora:** a funcionalidade foi pausada. Dar uma série como feita já não inicia o descanso, a sessão não pede a permissão das notificações e não agenda alertas. O código (`rest-timer.tsx`, `rest-notifications.ts` e as funções de descanso em `src/core/session`) fica no projeto para voltar mais tarde; um alerta antigo ainda é cancelado ao terminar ou descartar o treino.
+- **Sem temporizador de descanso nem notificações na v1** (decisão de produto de nov. 2026). Foram removidos:
+  - o componente e o agendamento dos alertas;
+  - a lógica de descanso em `src/core/session`;
+  - os testes;
+  - a dependência `expo-notifications`.
+
+  A app não pede a permissão de notificações, e o APK não declara permissões de notificações. Os rascunhos antigos que ainda tenham campos de descanso abrem na mesma, porque esses campos são ignorados. O código está no histórico do git, se voltar.
 - **"Terminar"** é um botão a toda a largura, fixo no fundo do ecrã da sessão.
 
 ## Editar e apagar treinos gravados
 
 - **Editar** usa o mesmo ecrã de cartões e a mesma lógica da sessão (`src/core/session`): `sessionFromWorkout` carrega o treino gravado, com todas as séries feitas, e `toUpdatePayload` gera o pedido do `update_gym_session`.
-  - Não há temporizador de descanso nem selo de PR na hora: os recordes oficiais são reconstruídos pelo Postgres ao gravar.
+  - Não há selo de PR na hora: os recordes oficiais são reconstruídos pelo Postgres ao gravar.
   - A edição vive numa store só em memória (`src/features/session/edit-store.ts`), separada do treino em curso, e é descartada ao sair do ecrã sem gravar. Ir à biblioteca acrescentar exercícios (`/exercises?pick=gym-edit:<treino>`) não a perde.
   - A data e a hora de início são escritas pelo atleta. A hora é convertida num instante no fuso do treino (`instantOf` em `src/core/dates`), e a data local fica como foi escrita.
 - **Apagar** usa o `delete_activity`, depois de uma confirmação.
