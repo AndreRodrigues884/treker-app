@@ -90,6 +90,23 @@ Na v1 entra o que um atleta usa em todos os treinos; o social e os pagamentos es
 
 **Nota:** As respostas do onboarding decidem o ecrã inicial (modalidades, foco do ginásio, estilo de natação, objetivo semanal) — aplicar quando o ecrã inicial for construído.
 
+## Estatísticas do ginásio (v1)
+
+Mostram a evolução sem prescrever nada. As contas são feitas no Postgres (ver [database.md](database.md#progresso-e-estatísticas-do-ginásio)).
+
+- **Progresso em cada treino:** cada exercício é comparado com a última vez que o atleta o fez. Sobe ou desce com uma mudança de 0,5% ou mais no 1RM estimado da melhor série; sem 1RM, conta o tempo (prancha) ou o volume. O treino mostra "4 de 6 exercícios progrediram" e uma seta ao lado de cada exercício.
+- **Ecrã de um treino guardado:** quantas vezes foi feito, a última data, e a evolução de cada exercício nos últimos treinos.
+- **Ecrã Estatísticas:** treinos por semana contra o objetivo semanal, a força dos exercícios escolhidos (até 5, em vez da "Força Total"), o volume por semana e por grupo muscular, e os treinos guardados mais feitos. Tem 4 semanas, 3 meses, 1 ano ou tudo.
+
+**Ideias para mais tarde** (fora da v1):
+
+| Ideia | Porquê |
+| --- | --- |
+| Sequência de semanas a cumprir o objetivo | Motivação simples e visível, sem prescrever treinos |
+| Recordes por mês | Mostra que o atleta continua a evoluir mesmo quando o 1RM abranda |
+| Percentagem de séries difíceis por semana | Usa a dificuldade que o atleta já regista para mostrar a carga da semana |
+| Aviso de estagnação ("o supino não sobe há 4 semanas") | É a "Deteção de estagnação" (P1) da tabela [Atualizar](#atualizar): informa, não prescreve. Pode usar a mesma regra de progresso |
+
 ## Roadmap por prioridade
 
 **Nota para a Fase 1:** O treino em curso fica guardado num rascunho no telemóvel até ser gravado no servidor, para uma falha de rede no fim não perder as séries.

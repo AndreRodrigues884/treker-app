@@ -1,0 +1,139 @@
+[
+  {
+    "name": "100 kg × 8 → 100 kg × 9 goes up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 8, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 9, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 130, "previous": 126.67, "result": "up" }
+  },
+  {
+    "name": "100 kg × 8 → 102.5 kg × 8 goes up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 8, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 102.5, "reps": 8, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 129.83, "previous": 126.67, "result": "up" }
+  },
+  {
+    "name": "100 kg × 10 → 102.5 kg × 3 goes down (heavier, but a lower estimated 1RM)",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 10, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 102.5, "reps": 3, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 112.75, "previous": 133.33, "result": "down" }
+  },
+  {
+    "name": "100 kg × 8 → 100 kg × 8 stays the same",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 8, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 8, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 126.67, "previous": 126.67, "result": "same" }
+  },
+  {
+    "name": "a rise under 0.5% stays the same",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 8, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 100.25, "reps": 8, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 126.98, "previous": 126.67, "result": "same" }
+  },
+  {
+    "name": "a rise of exactly 0.5% goes up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 1, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 100.5, "reps": 1, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 100.5, "previous": 100, "result": "up" }
+  },
+  {
+    "name": "a drop under 0.5% stays the same",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 1, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 99.6, "reps": 1, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 99.6, "previous": 100, "result": "same" }
+  },
+  {
+    "name": "a drop of exactly 0.5% goes down",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 1, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 99.5, "reps": 1, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 99.5, "previous": 100, "result": "down" }
+  },
+  {
+    "name": "the best set of the workout is the one compared",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": {
+      "bodyweightKg": null,
+      "sets": [
+        { "weightKg": 100, "reps": 5, "durationS": null },
+        { "weightKg": 90, "reps": 8, "durationS": null }
+      ]
+    },
+    "current": {
+      "bodyweightKg": null,
+      "sets": [
+        { "weightKg": 80, "reps": 10, "durationS": null },
+        { "weightKg": 95, "reps": 8, "durationS": null }
+      ]
+    },
+    "expected": { "measure": "one_rep_max", "current": 120.33, "previous": 116.67, "result": "up" }
+  },
+  {
+    "name": "weighted pull-ups count the bodyweight: +10 kg × 5 → +10 kg × 6 at 70 kg goes up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": true },
+    "previous": { "bodyweightKg": 70, "sets": [{ "weightKg": 10, "reps": 5, "durationS": null }] },
+    "current": { "bodyweightKg": 70, "sets": [{ "weightKg": 10, "reps": 6, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 26, "previous": 23.33, "result": "up" }
+  },
+  {
+    "name": "assisted pull-ups with less assistance go up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": true },
+    "previous": { "bodyweightKg": 70, "sets": [{ "weightKg": -20, "reps": 5, "durationS": null }] },
+    "current": { "bodyweightKg": 70, "sets": [{ "weightKg": -10, "reps": 5, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 0, "previous": -11.67, "result": "up" }
+  },
+  {
+    "name": "pull-ups without a bodyweight have no 1RM and use the volume",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": true },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 10, "reps": 5, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 10, "reps": 6, "durationS": null }] },
+    "expected": { "measure": "volume", "current": 60, "previous": 50, "result": "up" }
+  },
+  {
+    "name": "a plank uses the best time: 45 s and 60 s → 70 s goes up",
+    "exercise": { "unit": "seconds", "tracksLoad": false, "addsBodyweight": false },
+    "previous": {
+      "bodyweightKg": null,
+      "sets": [
+        { "weightKg": null, "reps": null, "durationS": 45 },
+        { "weightKg": null, "reps": null, "durationS": 60 }
+      ]
+    },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": null, "reps": null, "durationS": 70 }] },
+    "expected": { "measure": "duration", "current": 70, "previous": 60, "result": "up" }
+  },
+  {
+    "name": "sets of 15 reps have no 1RM and use the volume: 60 kg × 15 → 62.5 kg × 15 goes up",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 60, "reps": 15, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 62.5, "reps": 15, "durationS": null }] },
+    "expected": { "measure": "volume", "current": 937.5, "previous": 900, "result": "up" }
+  },
+  {
+    "name": "a 1RM on one side only compares the volume of both",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": { "bodyweightKg": null, "sets": [{ "weightKg": 60, "reps": 15, "durationS": null }] },
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 80, "reps": 5, "durationS": null }] },
+    "expected": { "measure": "volume", "current": 400, "previous": 900, "result": "down" }
+  },
+  {
+    "name": "the first time has no previous value",
+    "exercise": { "unit": "reps", "tracksLoad": true, "addsBodyweight": false },
+    "previous": null,
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": 100, "reps": 5, "durationS": null }] },
+    "expected": { "measure": "one_rep_max", "current": 116.67, "previous": null, "result": "first" }
+  },
+  {
+    "name": "the first plank uses its time",
+    "exercise": { "unit": "seconds", "tracksLoad": false, "addsBodyweight": false },
+    "previous": null,
+    "current": { "bodyweightKg": null, "sets": [{ "weightKg": null, "reps": null, "durationS": 30 }] },
+    "expected": { "measure": "duration", "current": 30, "previous": null, "result": "first" }
+  }
+]

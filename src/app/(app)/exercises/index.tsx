@@ -34,23 +34,25 @@ export default function ExercisesScreen() {
 function BrowseExercises() {
   const { t } = useI18n();
   return (
-    <Screen scroll>
-      <View style={styles.content}>
-        <Header title={t.exercises.title} />
-        <Button
-          label={t.exercises.create}
-          icon={Plus}
-          variant="secondary"
-          onPress={() => router.push('/exercises/new')}
-        />
-        <ExerciseLibrary
-          mode="browse"
-          onOpen={(exercise) =>
-            router.push({ pathname: '/exercise/[id]', params: { id: exercise.id } })
-          }
-          onCreate={(name) => router.push({ pathname: '/exercises/new', params: { name } })}
-        />
-      </View>
+    <Screen>
+      <ExerciseLibrary
+        mode="browse"
+        header={
+          <>
+            <Header title={t.exercises.title} />
+            <Button
+              label={t.exercises.create}
+              icon={Plus}
+              variant="secondary"
+              onPress={() => router.push('/exercises/new')}
+            />
+          </>
+        }
+        onOpen={(exercise) =>
+          router.push({ pathname: '/exercise/[id]', params: { id: exercise.id } })
+        }
+        onCreate={(name) => router.push({ pathname: '/exercises/new', params: { name } })}
+      />
     </Screen>
   );
 }
@@ -90,7 +92,6 @@ function PickExercises({ session }: { session: string }) {
 
   return (
     <Screen
-      scroll
       floating={
         <View style={styles.footer}>
           <AppText variant="caption" color="muted" accessibilityLiveRegion="polite">
@@ -104,24 +105,26 @@ function PickExercises({ session }: { session: string }) {
         </View>
       }
     >
-      <View style={styles.content}>
-        <Header title={t.exercises.pickTitle} onBack={cancel} />
-        {/* Creating one here comes back ticked, so the workout being edited is never left. */}
-        <Button
-          label={t.exercises.create}
-          icon={Plus}
-          variant="secondary"
-          onPress={() => router.push({ pathname: '/exercises/new', params: { pick: session } })}
-        />
-        <ExerciseLibrary
-          mode="pick"
-          picked={picked}
-          onToggle={(exercise) => togglePickedExercise(session, exercise.id)}
-          onCreate={(name) =>
-            router.push({ pathname: '/exercises/new', params: { name, pick: session } })
-          }
-        />
-      </View>
+      <ExerciseLibrary
+        mode="pick"
+        header={
+          <>
+            <Header title={t.exercises.pickTitle} onBack={cancel} />
+            {/* Creating one here comes back ticked, so the workout being edited is never left. */}
+            <Button
+              label={t.exercises.create}
+              icon={Plus}
+              variant="secondary"
+              onPress={() => router.push({ pathname: '/exercises/new', params: { pick: session } })}
+            />
+          </>
+        }
+        picked={picked}
+        onToggle={(exercise) => togglePickedExercise(session, exercise.id)}
+        onCreate={(name) =>
+          router.push({ pathname: '/exercises/new', params: { name, pick: session } })
+        }
+      />
     </Screen>
   );
 }
@@ -141,9 +144,6 @@ function Header({ title, onBack = () => router.back() }: { title: string; onBack
 }
 
 const styles = StyleSheet.create({
-  content: {
-    gap: spacing[4],
-  },
   top: {
     alignItems: 'flex-start',
   },

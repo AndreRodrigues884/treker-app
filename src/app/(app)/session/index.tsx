@@ -1,37 +1,28 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { router } from 'expo-router';
 import { ArrowLeft, Dumbbell, Plus } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
 import Sortable from 'react-native-sortables';
 
-import { AppText, Button, ConfirmDialog, EmptyState, Screen } from '@/components';
+import { AppText, Button, EmptyState, Screen } from '@/components';
 import { exerciseName } from '@/core/exercises';
-import { restRemainingS, type SessionExercise } from '@/core/session';
+import type { SessionExercise } from '@/core/session';
 import { useDataContext } from '@/features/auth/auth-provider';
 import { useExercises } from '@/features/exercises/queries';
 import { SessionExerciseCard } from '@/features/session/exercise-card';
 import { GYM_SESSION_PICK } from '@/features/session/pick';
 import { useSessionActions } from '@/features/session/queries';
-import { REST_SHEET_HEIGHT, RestTimer } from '@/features/session/rest-timer';
-import {
-  configureRestNotifications,
-  getNotificationPermission,
-  requestNotificationPermission,
-} from '@/features/session/rest-notifications';
 import { useActiveSession } from '@/features/session/session-store';
 import { useI18n } from '@/lib/i18n';
-import { readJson, storageKeys, writeJson } from '@/lib/storage';
-import { useNow } from '@/lib/use-now';
-import { spacing } from '@/theme';
+import { colors, sizes, spacing } from '@/theme';
 
 /**
- * The gym session in progress: the workout's name with "Finish" (how long it takes is not
- * recorded), one card per exercise (drag its handle to change the order; tap a set to fill it in),
- * and, while resting, the rest timer in a sheet that slides up from the bottom. Everything is kept
- * on the phone
- * as it changes; nothing is sent until "Finish" → "Save". The screen stays on while it is open.
+ * The gym session in progress: the workout's name, one card per exercise (drag its handle to change
+ * the order; tap a set to fill it in), and "Finish" across the bottom of the screen (how long it
+ * takes is not recorded; there is no rest timer for now). Everything is kept on the phone as it
+ * changes; nothing is sent until "Finish" → "Save". The screen stays on while it is open.
  */
 export default function SessionScreen() {
   useKeepAwake();
@@ -40,29 +31,12 @@ export default function SessionScreen() {
   const session = useActiveSession(ctx.userId);
   const actions = useSessionActions();
   const exercises = useExercises();
-  const now = useNow();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const [askPermission, setAskPermission] = useState(false);
-
-  // The rest alert: a notification channel, and the permission asked once, with a reason.
-  useEffect(() => {
-    void configureRestNotifications(t.session.restChannel);
-    void (async () => {
-      const asked = await readJson(storageKeys.restNotificationsAsked);
-      if (!asked && (await getNotificationPermission()) === 'undetermined') setAskPermission(true);
-    })();
-  }, [t.session.restChannel]);
 
   const byId = useMemo(
     () => new Map((exercises.data ?? []).map((exercise) => [exercise.id, exercise])),
     [exercises.data],
   );
-
-  const answerPermission = async (allow: boolean) => {
-    setAskPermission(false);
-    await writeJson(storageKeys.restNotificationsAsked, true);
-    if (allow) await requestNotificationPermission();
-  };
 
   if (session === undefined) {
     return (
@@ -88,7 +62,6 @@ export default function SessionScreen() {
   }
 
   const title = session.templateName ?? t.session.emptyWorkout;
-  const remaining = restRemainingS(session.rest, now);
 
   const renderExercise = ({ item, index }: { item: SessionExercise; index: number }) => {
     const row = byId.get(item.id);
@@ -106,26 +79,20 @@ export default function SessionScreen() {
   return (
     <Screen
       floating={
-        remaining > 0 ? (
-          <RestTimer
-            remainingS={remaining}
-            durationS={session.rest?.durationS ?? remaining}
-            onLess={() => void actions.adjustRest(-15)}
-            onMore={() => void actions.adjustRest(15)}
-            onSkip={() => void actions.skipRest()}
+        <View style={styles.footer}>
+          <Button
+            label={t.session.finish}
+            fullWidth
+            onPress={() => router.push('/session/finish')}
           />
-        ) : undefined
+        </View>
       }
     >
       <Animated.ScrollView
         ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         style={styles.scroll}
-        // While resting, room at the bottom for the rest sheet.
-        contentContainerStyle={[
-          styles.scrollContent,
-          remaining > 0 && { paddingBottom: REST_SHEET_HEIGHT + spacing[4] },
-        ]}
+        contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.content}>
           <View style={styles.header}>
@@ -135,7 +102,6 @@ export default function SessionScreen() {
               icon={ArrowLeft}
               onPress={() => router.back()}
             />
-            <Button label={t.session.finish} onPress={() => router.push('/session/finish')} />
           </View>
           <AppText variant="title" accessibilityRole="header">
             {title}
@@ -168,16 +134,6 @@ export default function SessionScreen() {
           />
         </View>
       </Animated.ScrollView>
-
-      <ConfirmDialog
-        visible={askPermission}
-        title={t.session.permissionTitle}
-        body={t.session.permissionBody}
-        confirmLabel={t.session.allow}
-        cancelLabel={t.session.notNow}
-        onConfirm={() => void answerPermission(true)}
-        onCancel={() => void answerPermission(false)}
-      />
     </Screen>
   );
 }
@@ -194,8 +150,18 @@ const styles = StyleSheet.create({
     gap: spacing[4],
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  // "Finish" across the bottom, above the safe area.
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    backgroundColor: colors.bg,
+    borderTopWidth: sizes.border,
+    borderTopColor: colors.line,
   },
 });

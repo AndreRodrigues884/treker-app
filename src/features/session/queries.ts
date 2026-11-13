@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   addExercises,
-  adjustRest,
   moveExercise,
   removeExercise,
   reorderExercises,
@@ -11,7 +10,6 @@ import {
   setExercisePlan,
   setSessionTitle,
   setSessionWhen,
-  skipRest,
   startSession,
   type GymSession,
   type SaveSessionPayload,
@@ -23,7 +21,6 @@ import { listExercises, type ExerciseRow } from '@/features/exercises/repository
 import type { TemplateWithExercises } from '@/features/templates/repository';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getDeviceTimezone } from '@/lib/device';
-import { useI18n } from '@/lib/i18n';
 
 import { deleteActivity } from '@/features/activities/repository';
 import { invalidateWorkoutChange } from '@/features/records/queries';
@@ -41,7 +38,7 @@ import {
   saveGymSession,
   updateGymSession,
 } from './repository';
-import { cancelRestEnd, scheduleRestEnd } from './rest-notifications';
+import { cancelRestEnd } from './rest-notifications';
 import { getActiveSession, setActiveSession, updateActiveSession } from './session-store';
 
 export { exerciseInfo };
@@ -114,33 +111,13 @@ export function useStartGymSession() {
 
 /**
  * Everything the session screen does to the draft. Each change is written to the phone at once.
- * Doing a set starts the rest timer and schedules the "rest is over" alert; adjusting or skipping
- * the rest moves or cancels it.
+ * There is no rest timer for now.
  */
 export function useSessionActions() {
   const ctx = useDataContext();
-  const { t } = useI18n();
   const records = useCurrentGymRecords();
   const fetchLast = useFetchLastPerformance();
   const change = (fn: (session: GymSession) => GymSession) => updateActiveSession(ctx.userId, fn);
-
-  // Re-schedules the alert for the session's rest (or cancels it when there is none).
-  const syncRestAlert = async (previousId: string | null) => {
-    await cancelRestEnd(previousId);
-    const session = getActiveSession(ctx.userId);
-    if (!session?.rest) return;
-    const id = await scheduleRestEnd(new Date(session.rest.endsAt), {
-      title: t.session.restOverTitle,
-      body: t.session.restOverBody,
-    });
-    await change((current) => ({ ...current, restNotificationId: id }));
-  };
-
-  const restChange = async (fn: (session: GymSession) => GymSession) => {
-    const previousId = getActiveSession(ctx.userId)?.restNotificationId ?? null;
-    await change(fn);
-    await syncRestAlert(previousId);
-  };
 
   return {
     setPlan: (
@@ -156,13 +133,16 @@ export function useSessionActions() {
       const last = await fetchLast(rows.map((row) => row.id)).catch(() => ({}));
       await change((session) => addExercises(session, rows.map(exerciseInfo), last, ctx.newId));
     },
-    // "OK" on a set: its values and difficulty, done; starts the rest (and its alert) when new.
+    // "OK" on a set: its values and difficulty, done. No rest timer for now (paused): the rest
+    // saveSet would start is dropped.
     saveSet: (key: string, setId: string, values: SetValues) =>
-      restChange((session) => saveSet(session, key, setId, values, ctx.now(), records.data ?? {})),
-    adjustRest: (deltaS: number) => restChange((session) => adjustRest(session, deltaS, ctx.now())),
-    skipRest: () => restChange(skipRest),
+      change((session) => ({
+        ...saveSet(session, key, setId, values, ctx.now(), records.data ?? {}),
+        rest: null,
+      })),
     // Written to the phone at each keystroke, so the title survives the app closing.
     setTitle: (title: string) => change((session) => setSessionTitle(session, title)),
+    // A rest alert from before the timer was paused is still cancelled.
     discard: async () => {
       await cancelRestEnd(getActiveSession(ctx.userId)?.restNotificationId ?? null);
       await setActiveSession(ctx.userId, null);

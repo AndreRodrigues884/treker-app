@@ -9,6 +9,14 @@
 import type { Session } from '@supabase/supabase-js';
 
 import { compareActivities } from '@/core/activities';
+import { addDays, weekRange } from '@/core/dates';
+import {
+  compareProgress,
+  overallProgress,
+  summarizeProgress,
+  workoutMeasures,
+  type ExerciseProgress,
+} from '@/core/progress';
 import { estimateOneRepMax } from '@/core/records';
 import type { Tables } from '@/lib/supabase/database.types';
 
@@ -277,6 +285,20 @@ export const supabaseMock = {
       };
     }
     if (fn === 'exercise_history') return { data: exerciseHistory(args), error: null };
+    if (fn === 'session_progress') {
+      return { data: sessionProgress(args.p_activity_id as string), error: null };
+    }
+    if (fn === 'template_progress') return { data: templateProgress(args), error: null };
+    if (fn === 'one_rep_max_series') {
+      const ids = (args.p_exercise_ids as string[]) ?? [];
+      if (ids.length > 5) {
+        return { data: null, error: { code: '22023', message: 'at most 5 exercises' } };
+      }
+      return { data: oneRepMaxSeries(ids, args.p_from as string | undefined), error: null };
+    }
+    if (fn === 'weekly_summary') return { data: weeklySummary(args), error: null };
+    if (fn === 'volume_by_muscle_group') return { data: volumeByMuscleGroup(args), error: null };
+    if (fn === 'template_usage') return { data: templateUsage(args), error: null };
     if (fn === 'delete_custom_exercise') {
       const exercise = rowsOf('exercises').find(
         (row) => row.id === args.p_exercise_id && row.owner_id === TEST_USER_ID,
@@ -656,6 +678,216 @@ function exerciseProgress(exerciseId: string, from?: string): Row[] {
     points.set(activity.id as string, point);
   }
   return [...points.values()];
+}
+
+// Statistics and progress (phase 1d), like the Postgres functions, with the shared progress rule
+// from src/core/progress.
+
+const liveActivities = () =>
+  rowsOf('activities').filter((row) => row.user_id === TEST_USER_ID && !row.deleted_at);
+
+const workSetsOf = (activityId: string, exerciseId?: string) =>
+  rowsOf('gym_sets').filter(
+    (set) =>
+      set.activity_id === activityId &&
+      !set.deleted_at &&
+      !set.is_warmup &&
+      (exerciseId === undefined || set.exercise_id === exerciseId),
+  );
+
+const exerciseRow = (id: string) => rowsOf('exercises').find((row) => row.id === id);
+
+// The list order, oldest first: date, start time (none = earliest of the day), id.
+const orderKey = (activity: Row) =>
+  [
+    String(activity.local_date),
+    (activity.started_at as string | null | undefined) ?? '',
+    String(activity.id),
+  ].join('|');
+
+function measuresOf(activity: Row, exerciseId: string) {
+  const exercise = exerciseRow(exerciseId);
+  return workoutMeasures(
+    {
+      unit: (exercise?.unit as 'reps' | 'seconds') ?? 'reps',
+      tracksLoad: (exercise?.tracks_load as boolean) ?? true,
+      addsBodyweight: (exercise?.adds_bodyweight as boolean) ?? false,
+    },
+    workSetsOf(activity.id as string, exerciseId).map((set) => ({
+      weightKg: (set.weight_kg as number | null) ?? null,
+      reps: (set.reps as number | null) ?? null,
+      durationS: (set.duration_s as number | null) ?? null,
+    })),
+    (activity.bodyweight_kg as number | null) ?? null,
+  );
+}
+
+function sessionProgress(activityId: string): Row[] {
+  const activity = liveActivities().find((row) => row.id === activityId && row.type === 'gym');
+  if (!activity) return [];
+  const positions = new Map<string, number>();
+  for (const set of workSetsOf(activityId)) {
+    const id = set.exercise_id as string;
+    positions.set(id, Math.min(positions.get(id) ?? Infinity, set.exercise_position as number));
+  }
+  const rows = [...positions.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([exerciseId, position]) => {
+      const previous = liveActivities()
+        .filter(
+          (row) =>
+            orderKey(row) < orderKey(activity) &&
+            workSetsOf(row.id as string, exerciseId).length > 0,
+        )
+        .sort((a, b) => orderKey(b).localeCompare(orderKey(a)))[0];
+      const unit = (exerciseRow(exerciseId)?.unit as 'reps' | 'seconds') ?? 'reps';
+      const progress: ExerciseProgress = compareProgress(
+        unit,
+        measuresOf(activity, exerciseId),
+        previous ? measuresOf(previous, exerciseId) : null,
+      );
+      return {
+        exercise_id: exerciseId,
+        exercise_position: position,
+        measure: progress.measure,
+        current_value: progress.current,
+        previous_value: progress.previous,
+        previous_date: previous?.local_date ?? null,
+        previous_activity_id: previous?.id ?? null,
+        result: progress.result,
+      };
+    });
+  const summary = summarizeProgress(rows.map((row) => row.result));
+  return rows.map((row) => ({
+    ...row,
+    up_count: summary.up,
+    same_count: summary.same,
+    down_count: summary.down,
+    first_count: summary.first,
+    session_result: overallProgress(summary),
+  }));
+}
+
+function templateProgress(args: Row): Row[] {
+  const limit = Math.min(Math.max(Number(args.p_limit ?? 8), 1), 20);
+  const from = args.p_from as string | undefined;
+  return liveActivities()
+    .filter(
+      (row) =>
+        row.template_id === args.p_template_id &&
+        row.type === 'gym' &&
+        (!from || String(row.local_date) >= from),
+    )
+    .sort((a, b) => orderKey(b).localeCompare(orderKey(a)))
+    .slice(0, limit)
+    .reverse()
+    .flatMap((activity) =>
+      sessionProgress(activity.id as string).map((row) => ({
+        activity_id: activity.id,
+        local_date: activity.local_date,
+        started_at: activity.started_at ?? null,
+        exercise_id: row.exercise_id,
+        exercise_position: row.exercise_position,
+        measure: row.measure,
+        current_value: row.current_value,
+        previous_value: row.previous_value,
+        result: row.result,
+        session_result: row.session_result,
+      })),
+    );
+}
+
+function oneRepMaxSeries(exerciseIds: string[], from?: string): Row[] {
+  return exerciseIds.flatMap((exerciseId) =>
+    exerciseProgress(exerciseId, from)
+      .filter((point) => point.best_one_rep_max_kg !== null)
+      .map((point) => ({
+        exercise_id: exerciseId,
+        activity_id: point.activity_id,
+        local_date: point.local_date,
+        best_one_rep_max_kg: point.best_one_rep_max_kg,
+      })),
+  );
+}
+
+const volumeOfActivity = (activityId: string) =>
+  workSetsOf(activityId).reduce((total, set) => total + volumeOf(set), 0);
+
+function inRange(activity: Row, args: Row): boolean {
+  const date = String(activity.local_date);
+  const from = args.p_from as string | undefined;
+  return (!from || date >= from) && date <= String(args.p_to);
+}
+
+function weeklySummary(args: Row): Row[] {
+  const activities = liveActivities();
+  const first =
+    (args.p_from as string | undefined) ??
+    activities.map((row) => String(row.local_date)).sort()[0] ??
+    String(args.p_to);
+  const weeks: Row[] = [];
+  for (let week = weekRange(first).start; week <= String(args.p_to); week = addDays(week, 7)) {
+    const end = addDays(week, 6);
+    const inWeek = activities.filter(
+      (row) => String(row.local_date) >= week && String(row.local_date) <= end,
+    );
+    const gym = inWeek.filter((row) => row.type === 'gym');
+    weeks.push({
+      week_start: week,
+      workout_count: inWeek.length,
+      gym_count: gym.length,
+      volume_kg: gym.reduce((total, row) => total + volumeOfActivity(row.id as string), 0),
+    });
+  }
+  return weeks;
+}
+
+function volumeByMuscleGroup(args: Row): Row[] {
+  const groups = new Map<string, { volume: number; sets: number; workouts: Set<string> }>();
+  const workouts = liveActivities().filter((row) => row.type === 'gym' && inRange(row, args));
+  for (const activity of workouts) {
+    for (const set of workSetsOf(activity.id as string)) {
+      const group = String(exerciseRow(set.exercise_id as string)?.muscle_group ?? 'full_body');
+      const entry = groups.get(group) ?? { volume: 0, sets: 0, workouts: new Set<string>() };
+      entry.workouts.add(activity.id as string);
+      groups.set(group, { ...entry, volume: entry.volume + volumeOf(set), sets: entry.sets + 1 });
+    }
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[1].workouts.size - a[1].workouts.size || b[1].volume - a[1].volume)
+    .map(([group, entry]) => ({
+      muscle_group: group,
+      volume_kg: entry.volume,
+      set_count: entry.sets,
+      workout_count: entry.workouts.size,
+    }));
+}
+
+function templateUsage(args: Row): Row[] {
+  const templates = rowsOf('workout_templates').filter(
+    (row) => row.user_id === TEST_USER_ID && !row.deleted_at,
+  );
+  return templates
+    .map((template) => {
+      const done = liveActivities().filter(
+        (row) => row.template_id === template.id && inRange(row, args),
+      );
+      return {
+        template_id: template.id,
+        name: template.name,
+        workout_count: done.length,
+        last_date:
+          done
+            .map((row) => String(row.local_date))
+            .sort()
+            .pop() ?? null,
+      };
+    })
+    .filter((row) => row.workout_count > 0)
+    .sort(
+      (a, b) =>
+        b.workout_count - a.workout_count || String(b.last_date).localeCompare(String(a.last_date)),
+    );
 }
 
 // Like Postgres exercise_history: the workouts with this exercise, newest first, by cursor.

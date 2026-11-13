@@ -182,9 +182,10 @@ Exemplos: repetições a zero ou negativas, RPE fora de 1 a 10 ou fora dos passo
 
 As funções dos triggers vivem no schema `private`, que não está exposto pela API. As funções `security definer` têm sempre o `search_path` fixo e não podem ser chamadas pelos utilizadores.
 
-Duas exceções, ambas no schema `private` (fora da API), com `execute` para `authenticated` só para as funções `security invoker` as poderem usar por dentro:
+Algumas exceções, todas no schema `private` (fora da API), com `execute` para `authenticated` só para as funções `security invoker` as poderem usar por dentro:
 - `private.rebuild_my_gym_keys`, que o `update_gym_session` chama no fim. Só reconstrói as chaves de `auth.uid()`, a partir dos dados do próprio atleta, que é o que os triggers fariam.
-- `private.estimate_one_rep_max`, que é só uma conta e é usada pelo `exercise_progress`.
+- `private.estimate_one_rep_max`, que é só uma conta e é usada pelo `exercise_progress` e pelas funções de progresso.
+- `private.week_start`, `private.progress_compare` e `private.overall_progress`: só contas, usadas pelas [funções de progresso e estatísticas](#progresso-e-estatísticas-do-ginásio).
 
 ### Listar treinos com os totais
 
@@ -290,6 +291,61 @@ Testes em `supabase/tests/19_gym_session_edit.sql`:
 - repetir não muda nada, e a marca fica desligada no fim;
 - não edita o treino de outro utilizador;
 - as três funções de leitura (e o anónimo não as pode chamar).
+
+### Progresso e estatísticas do ginásio
+
+Tudo é calculado no Postgres, na migração [`20261112100000_gym_stats.sql`](../supabase/migrations/20261112100000_gym_stats.sql). As seis funções são `security invoker` e `stable`, com `search_path` vazio, e só `authenticated` as pode executar: cada atleta só vê os seus treinos.
+
+**As semanas vão de segunda a domingo e usam a `local_date` dos treinos**, que já é o dia no fuso do atleta. Um treino às 23h30 de domingo em Lisboa fica nessa semana, e um às 00h30 de segunda fica na seguinte, mesmo que em UTC ainda seja domingo. A segunda-feira de uma data é calculada por `private.week_start`, com contas de datas, por isso não depende do fuso da sessão do Postgres.
+
+#### A regra de progresso
+
+O progresso não é o recorde. O recorde é o melhor 1RM estimado de sempre; o progresso compara um treino com o anterior.
+
+- **Com que treino se compara:** com o treino anterior (não apagado) em que o atleta fez esse exercício, venha ele de que treino guardado vier. "Anterior" segue a ordem da lista de treinos: `local_date`, depois `started_at` (sem hora conta como o início do dia), depois `id`.
+- **A medida:**
+  - é o 1RM estimado da melhor série, com as regras do 1RM (peso corporal nos exercícios com `adds_bodyweight`, de 1 a 12 reps), quando os dois treinos têm uma série que dá 1RM (ou, na primeira vez, quando este tem);
+  - sem isso, os exercícios em segundos usam o tempo da melhor série;
+  - os outros usam o volume das séries feitas (peso × reps, com a assistência a contar como zero).
+- **O resultado:**
+
+| Resultado | Quando |
+| --- | --- |
+| `up` (subiu) | A medida aumentou 0,5% ou mais |
+| `down` (desceu) | A medida diminuiu 0,5% ou mais |
+| `same` (manteve) | Mudou menos de 0,5% |
+| `first` (primeira vez) | Não há treino anterior com esse exercício |
+
+- **O resultado global de um treino** (`private.overall_progress`): mais exercícios a subir do que a descer é `up`; o contrário é `down`; um empate é `same`; um treino só com exercícios novos é `first`.
+- A regra está em `private.progress_compare` e, igual, em [`src/core/progress`](../src/core/progress/rule.ts). As duas são testadas contra o mesmo ficheiro de casos, [`supabase/tests/fixtures/progress-cases.json`](../supabase/tests/fixtures/progress-cases.json), pelo Jest e pelo pgTAP (`20_progress_cases.sql`, que cria um exercício e dois treinos reais para cada caso). Se alguém mudar uma sem a outra, os testes falham.
+- As contas são em `numeric`, por isso exatas: 0,5% é `200 × diferença ≥ |anterior|`.
+
+#### As funções
+
+| Função | Devolve |
+| --- | --- |
+| `session_progress(p_activity_id)` | Para cada exercício de um treino de ginásio: a medida, o valor de hoje, o valor e a data do treino anterior, e o resultado. Cada linha traz também o resumo do treino (quantos subiram, mantiveram, desceram e foram novos) e o resultado global. Um treino apagado ou de outro atleta não devolve nada |
+| `template_progress(p_template_id, p_from, p_limit)` | Os últimos `p_limit` treinos feitos a partir de um treino guardado (8 por defeito, no máximo 20), do mais antigo para o mais recente, com o resultado e o valor de cada exercício (como o `session_progress`) e o resultado global de cada treino |
+| `one_rep_max_series(p_exercise_ids, p_from)` | O melhor 1RM estimado de cada treino, por exercício, do mais antigo para o mais recente. No máximo 5 exercícios (mais dá erro `22023`); os treinos sem série que dê 1RM ficam de fora |
+| `weekly_summary(p_from, p_to)` | Uma linha por semana, da semana de `p_from` (ou do primeiro treino, quando vazio) à de `p_to`, **incluindo as semanas sem treinos, com zero**: os treinos de todas as modalidades (o objetivo semanal conta-os todos), os de ginásio e o volume do ginásio. `p_from` depois de `p_to` dá erro `22023` |
+| `volume_by_muscle_group(p_from, p_to)` | O volume e o número de séries de trabalho por grupo muscular (a etiqueta do exercício), o maior primeiro |
+| `template_usage(p_from, p_to)` | Quantas vezes cada treino guardado (não apagado) foi feito e a última data, o mais feito primeiro |
+
+Treinos, séries e treinos guardados apagados ficam sempre de fora, e os aquecimentos não contam.
+
+`explain`, medido com 60 atletas, 24 000 treinos e 288 000 séries: todas as funções usam os índices, e só as tabelas pequenas (`exercises` e `workout_templates`) são lidas por inteiro.
+- `session_progress` encontra o treino anterior de cada exercício pelo índice `activities (user_id, local_date desc, started_at desc nulls last, id desc)`, com as séries por `gym_sets (activity_id)` e `gym_sets (user_id, exercise_id)`.
+- `one_rep_max_series` usa `gym_sets (user_id, exercise_id)`.
+- `weekly_summary` e `volume_by_muscle_group` usam o índice das atividades por data e `gym_sets (activity_id)`.
+- `template_usage` e `template_progress` usam um índice novo, `activities (user_id, template_id, local_date desc) where template_id is not null`.
+
+Testes em `supabase/tests/21_gym_stats.sql`:
+- os valores certos de cada função;
+- cada exercício é comparado com o treino anterior com ele, mesmo que venha de outro treino guardado, e o treino apagado entre os dois é ignorado;
+- as semanas vazias com zero;
+- a fronteira da semana em Lisboa (domingo às 23h30 e segunda às 00h30, que em UTC ainda é domingo);
+- `p_limit`, `p_from` e o limite de 5 exercícios;
+- outro utilizador não recebe nada, e o anónimo não pode chamar as funções.
 
 ### Gravar um treino guardado
 
@@ -414,6 +470,7 @@ Por isso, corrigir um tempo impossível (por exemplo 15,00 nos 50 m) faz reapare
 | Recordes de um treino | `personal_records (activity_id)` |
 | Séries de uma sessão | `gym_sets (activity_id)` |
 | Histórico de um exercício | `gym_sets (user_id, exercise_id)` |
+| Treinos feitos a partir de um treino guardado (`template_usage`, `template_progress`) | `activities (user_id, template_id, local_date desc) where template_id is not null` |
 | Melhores tempos por prova | `swim_entries (user_id, stroke, distance, pool_length)` |
 | Sincronização ("o que mudou desde...") | `(user_id, updated_at)` em todas as tabelas de dados |
 | Reconstruir e mostrar recordes de uma chave | `personal_records (user_id, exercise_id, sequence)` e `(user_id, stroke, distance, pool_length, sequence)` |
@@ -442,5 +499,4 @@ O Studio local fica em http://127.0.0.1:54323.
 
 ## Por fazer
 
-- Os totais semanais.
 - Quando houver muitos dados, medir com `explain` o custo da reconstrução de uma chave com histórico longo.

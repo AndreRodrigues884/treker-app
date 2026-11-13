@@ -11,6 +11,7 @@
 import { z } from 'zod';
 
 import { localDateOf } from '../dates';
+import { compareProgress, workoutMeasures, type ExerciseProgress } from '../progress';
 import { estimateOneRepMax } from '../records';
 import { fromKilograms, toKilograms, type WeightUnit } from '../units';
 
@@ -435,6 +436,34 @@ export function setOneRepMaxKg(
     addsBodyweight: exercise.addsBodyweight,
     bodyweightKg: session.bodyweightKg,
   });
+}
+
+/**
+ * The finish screen's progress of an exercise: its done sets against "last time" (the previous
+ * workout with it, from last_performance), with the shared progress rule. Null without done sets.
+ * An indication: after saving, session_progress gives the official result (it also uses that
+ * workout's own bodyweight, where this uses today's).
+ */
+export function liveProgress(
+  session: Pick<GymSession, 'weightUnit' | 'bodyweightKg'>,
+  exercise: SessionExercise,
+): ExerciseProgress | null {
+  const done = exercise.sets.filter((set) => set.done);
+  if (done.length === 0) return null;
+  const current = workoutMeasures(
+    exercise,
+    done.map((set) => ({
+      weightKg: set.weight === null ? null : toKilograms(set.weight, session.weightUnit),
+      reps: set.reps,
+      durationS: set.seconds,
+    })),
+    session.bodyweightKg,
+  );
+  const previous =
+    exercise.last.length === 0
+      ? null
+      : workoutMeasures(exercise, exercise.last, session.bodyweightKg);
+  return compareProgress(exercise.unit, current, previous);
 }
 
 /**

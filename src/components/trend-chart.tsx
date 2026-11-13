@@ -2,7 +2,17 @@ import { useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { BarChart, LineChart } from 'react-native-gifted-charts';
 
-import { colors, fontFamilies, sizes, spacing, typography } from '@/theme';
+import {
+  colors,
+  fontFamilies,
+  opacity,
+  sizes,
+  spacing,
+  typography,
+  type ColorToken,
+} from '@/theme';
+
+import { Icon, type LucideIcon } from './icon';
 
 export type TrendChartPoint = {
   value: number;
@@ -10,6 +20,10 @@ export type TrendChartPoint = {
   label: string;
   // Drawn in the record colour (a point that was a personal record).
   highlight?: boolean;
+  // Bars only: the bar's colour (default: the gym accent).
+  color?: ColorToken;
+  // Bars only: a small icon above the bar, e.g. an arrow for the progress against the bar before.
+  topIcon?: { icon: LucideIcon; color: ColorToken };
 };
 
 export type TrendChartProps = {
@@ -19,12 +33,21 @@ export type TrendChartProps = {
   summary: string;
   // The y axis labels ("120", "1,2k"); numbers only, the unit is in the title.
   formatValue?: (value: number) => string;
+  // The line's or the bars' colour (default: the gym accent).
+  color?: ColorToken;
+  // A dashed horizontal line, e.g. the weekly goal.
+  reference?: { value: number; label: string };
+  // Bars only: tapping a bar selects it (the screen shows its exact value); the others are dimmed.
+  selectedIndex?: number;
+  onSelect?: (index: number) => void;
 };
 
 const HEIGHT = sizes.minTouch * 4;
 const Y_LABEL_WIDTH = sizes.minTouch;
 const EDGE = spacing[3];
 const MIN_SPACING = spacing[4];
+// The fill under a line fades from this to nothing.
+const AREA_OPACITY = 0.25;
 
 const axisText = {
   color: colors.muted,
@@ -38,17 +61,41 @@ const axisText = {
  * points are drawn in the record colour. It fits the width it is given and scrolls sideways only
  * when there are too many points. For screen readers the drawing is hidden and `summary` is read.
  */
-export function TrendChart({ kind, points, summary, formatValue }: TrendChartProps) {
+export function TrendChart({
+  kind,
+  points,
+  summary,
+  formatValue,
+  reference,
+  selectedIndex,
+  onSelect,
+  color = 'gym',
+}: TrendChartProps) {
   const [width, setWidth] = useState(0);
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
   const plotWidth = Math.max(0, width - Y_LABEL_WIDTH - EDGE * 2);
   const gaps = Math.max(1, points.length - (kind === 'line' ? 1 : 0));
   const step = Math.max(MIN_SPACING, plotWidth / gaps);
-  const maxValue = Math.max(1, ...points.map((point) => point.value));
+  const maxValue = Math.max(1, reference?.value ?? 0, ...points.map((point) => point.value));
   // Some headroom above the highest point.
   const ceiling = maxValue * 1.1;
   const yFormat = formatValue ? (label: string) => formatValue(Number(label)) : undefined;
+  const referenceLine = reference
+    ? {
+        showReferenceLine1: true,
+        referenceLine1Position: reference.value,
+        referenceLine1Config: {
+          color: colors.record,
+          thickness: sizes.border * 2,
+          type: 'dashed',
+          dashWidth: spacing[2],
+          dashGap: spacing[1],
+          labelText: reference.label,
+          labelTextStyle: { ...axisText, color: colors.record },
+        },
+      }
+    : {};
 
   return (
     <View
@@ -64,7 +111,7 @@ export function TrendChart({ kind, points, summary, formatValue }: TrendChartPro
             data={points.map((point) => ({
               value: point.value,
               label: point.label,
-              dataPointColor: point.highlight ? colors.record : colors.gym,
+              dataPointColor: point.highlight ? colors.record : colors[color],
               dataPointRadius: point.highlight ? spacing[1] + 1 : spacing[1] - 1,
             }))}
             height={HEIGHT}
@@ -74,8 +121,14 @@ export function TrendChart({ kind, points, summary, formatValue }: TrendChartPro
             endSpacing={EDGE}
             maxValue={ceiling}
             noOfSections={4}
-            color={colors.gym}
+            color={colors[color]}
             thickness={sizes.border * 2}
+            curved
+            areaChart
+            startFillColor={colors[color]}
+            endFillColor={colors[color]}
+            startOpacity={AREA_OPACITY}
+            endOpacity={0}
             yAxisLabelWidth={Y_LABEL_WIDTH}
             yAxisTextStyle={axisText}
             xAxisLabelTextStyle={axisText}
@@ -88,10 +141,18 @@ export function TrendChart({ kind, points, summary, formatValue }: TrendChartPro
         )}
         {width > 0 && points.length > 0 && kind === 'bar' && (
           <BarChart
-            data={points.map((point) => ({
+            data={points.map((point, index) => ({
               value: point.value,
               label: point.label,
-              frontColor: point.highlight ? colors.record : colors.gym,
+              onPress: onSelect ? () => onSelect(index) : undefined,
+              opacity:
+                selectedIndex === undefined || selectedIndex === index ? 1 : opacity.disabled,
+              frontColor: point.highlight
+                ? colors.record
+                : point.color
+                  ? colors[point.color]
+                  : colors[color],
+              topLabelComponent: topLabel(point.topIcon),
             }))}
             height={HEIGHT}
             width={plotWidth}
@@ -109,6 +170,7 @@ export function TrendChart({ kind, points, summary, formatValue }: TrendChartPro
             rulesColor={colors.divider}
             formatYLabel={yFormat}
             disableScroll={step * gaps <= plotWidth}
+            {...referenceLine}
           />
         )}
       </View>
@@ -116,8 +178,24 @@ export function TrendChart({ kind, points, summary, formatValue }: TrendChartPro
   );
 }
 
+// The small icon above a bar.
+function topLabel(topIcon: TrendChartPoint['topIcon']) {
+  if (!topIcon) return undefined;
+  return function TopIcon() {
+    return (
+      <View style={styles.topIcon}>
+        <Icon icon={topIcon.icon} size="sm" color={topIcon.color} />
+      </View>
+    );
+  };
+}
+
 const styles = StyleSheet.create({
   container: {
     minHeight: HEIGHT + spacing[8],
+  },
+  topIcon: {
+    alignItems: 'center',
+    marginBottom: spacing[1],
   },
 });

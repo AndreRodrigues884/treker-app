@@ -1,6 +1,6 @@
 import { Check, ChevronRight, Plus, SearchX } from 'lucide-react-native';
-import { useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   AppText,
@@ -36,6 +36,7 @@ export type ExerciseLibraryProps =
       mode: 'browse';
       onOpen: (exercise: ExerciseRow) => void;
       onCreate: (name: string) => void;
+      header?: ReactNode;
     }
   | {
       // Multiple choice: every row is a checkbox.
@@ -43,14 +44,23 @@ export type ExerciseLibraryProps =
       picked: readonly string[];
       onToggle: (exercise: ExerciseRow) => void;
       onCreate: (name: string) => void;
+      header?: ReactNode;
     };
+
+// No exercise ticked (consulting mode); one array, so the memo below stays put.
+const NONE: readonly string[] = [];
 
 /**
  * The exercise library, used to consult exercises and to pick several for a workout. Names in the
  * app language, search without accents or case, filters by muscle group and equipment, and the
  * athlete's own exercises marked and first. When nothing matches, offers to create the exercise
  * with the name typed.
+ *
+ * It is the screen's scrolling list (a FlatList, which only draws the rows near the screen): the
+ * screen puts its own top (back, title, buttons) in `header`, above the search and filters, and
+ * must not scroll itself (Screen without `scroll`).
  */
+
 export function ExerciseLibrary(props: ExerciseLibraryProps) {
   const { t, language } = useI18n();
   const exercises = useExercises();
@@ -62,8 +72,40 @@ export function ExerciseLibrary(props: ExerciseLibraryProps) {
   );
   const typed = filters.query.trim();
 
-  return (
+  // One stable function for every row, so a row redraws only when its own data changes (see
+  // ExerciseItem). It reads the screen's latest callbacks, which are new on every render.
+  const latest = useRef(props);
+  useEffect(() => {
+    latest.current = props;
+  });
+  const press = useCallback((exercise: ExerciseRow) => {
+    const current = latest.current;
+    if (current.mode === 'pick') current.onToggle(exercise);
+    else current.onOpen(exercise);
+  }, []);
+  const pickedIds = props.mode === 'pick' ? props.picked : NONE;
+  const picked = useMemo(() => new Set(pickedIds), [pickedIds]);
+  const kind = props.mode === 'pick' ? 'checkbox' : 'open';
+
+  const renderItem = useCallback(
+    ({ item }: { item: ExerciseRow }) => (
+      <ExerciseItem
+        exercise={item}
+        name={exerciseName(item, language)}
+        meta={exerciseMeta(t, item)}
+        yoursLabel={t.exercises.yours}
+        kind={kind}
+        checked={picked.has(item.id)}
+        onPress={press}
+      />
+    ),
+    [language, t, kind, picked, press],
+  );
+
+  // An element, not a component: the search field keeps its focus while typing.
+  const header = (
     <View style={styles.container}>
+      {props.header}
       <TextField
         label={t.exercises.search}
         placeholder={t.exercises.searchPlaceholder}
@@ -152,28 +194,28 @@ export function ExerciseLibrary(props: ExerciseLibraryProps) {
           />
         </View>
       )}
-
-      <View>
-        {results.map((exercise) => (
-          <ExerciseItem
-            key={exercise.id}
-            exercise={exercise}
-            name={exerciseName(exercise, language)}
-            meta={exerciseMeta(t, exercise)}
-            yoursLabel={t.exercises.yours}
-            {...(props.mode === 'pick'
-              ? {
-                  kind: 'checkbox' as const,
-                  checked: props.picked.includes(exercise.id),
-                  onPress: () => props.onToggle(exercise),
-                }
-              : { kind: 'open' as const, onPress: () => props.onOpen(exercise) })}
-          />
-        ))}
-      </View>
     </View>
   );
+
+  return (
+    <FlatList
+      data={results}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      extraData={picked}
+      ListHeaderComponent={header}
+      ListHeaderComponentStyle={styles.header}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      initialNumToRender={INITIAL_ROWS}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+    />
+  );
 }
+
+// Enough rows to fill a tall phone below the search and filters.
+const INITIAL_ROWS = 15;
 
 function FilterRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -198,13 +240,16 @@ type ExerciseItemProps = {
   name: string;
   meta: string;
   yoursLabel: string;
-} & (
-  | { kind: 'checkbox'; checked: boolean; onPress: () => void }
-  | { kind: 'open'; onPress: () => void }
-  | { kind: 'info' }
-);
+  // checkbox: multiple choice; open: opens the exercise.
+  kind: 'checkbox' | 'open';
+  checked: boolean;
+  // The same function for every row (it receives the row's exercise), so memo can skip rows.
+  onPress: (exercise: ExerciseRow) => void;
+};
 
-function ExerciseItem(props: ExerciseItemProps) {
+// Memoised: typing in the search or ticking one exercise redraws only the rows whose props changed
+// (the exercise rows come from the cache, so they keep the same object while unchanged).
+const ExerciseItem = memo(function ExerciseItem(props: ExerciseItemProps) {
   const custom = isCustomExercise(props.exercise);
   const label = [props.name, custom ? props.yoursLabel : null, props.meta]
     .filter(Boolean)
@@ -230,17 +275,9 @@ function ExerciseItem(props: ExerciseItemProps) {
     </>
   );
 
-  if (props.kind === 'info') {
-    return (
-      <View style={styles.item} accessible accessibilityLabel={label}>
-        {content}
-      </View>
-    );
-  }
-
   return (
     <Pressable
-      onPress={props.onPress}
+      onPress={() => props.onPress(props.exercise)}
       accessibilityRole={props.kind === 'checkbox' ? 'checkbox' : 'button'}
       accessibilityLabel={label}
       accessibilityState={props.kind === 'checkbox' ? { checked: props.checked } : undefined}
@@ -253,11 +290,20 @@ function ExerciseItem(props: ExerciseItemProps) {
       {content}
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
     gap: spacing[4],
+  },
+  header: {
+    marginBottom: spacing[2],
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: spacing[8],
   },
   filter: {
     gap: spacing[2],

@@ -47,6 +47,9 @@ import { useExercises } from '@/features/exercises/queries';
 import { difficultyLabel, difficultyTone } from '@/features/session/difficulty';
 import { useDeleteWorkout } from '@/features/session/queries';
 import { sportLabel } from '@/features/onboarding/labels';
+import { ProgressIndicator, ProgressSummaryCard } from '@/features/stats/progress-indicator';
+import { useWorkoutProgress } from '@/features/stats/queries';
+import type { ExerciseProgressRow } from '@/features/stats/repository';
 import { getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { colors, opacity, sizes, spacing } from '@/theme';
@@ -54,7 +57,9 @@ import { colors, opacity, sizes, spacing } from '@/theme';
 /**
  * One workout: its date, duration and totals, the exercises with their sets (or the
  * swim times), and the records it set, marked next to the set or time that beat the previous best.
- * A gym workout can be edited (activities/edit/[id]) or deleted, after a confirmation.
+ * A gym workout also shows its progress: how many exercises went up, and next to each exercise an
+ * arrow against the last time it was done (session_progress). It can be edited
+ * (activities/edit/[id]) or deleted, after a confirmation.
  */
 export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -118,6 +123,7 @@ function WorkoutDetail({
   };
   const type: ActivityType = activity.type;
   const today = localDateOf(new Date(), getDeviceTimezone());
+  const progress = useWorkoutProgress(activity.id, { enabled: type === 'gym' });
   const remove = useDeleteWorkout();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const exerciseIds = [...new Set(gymSets.map((set) => set.exercise_id))];
@@ -190,6 +196,10 @@ function WorkoutDetail({
         onConfirm={deleteWorkout}
       />
 
+      {type === 'gym' && progress.data && progress.data.exercises.length > 0 && (
+        <ProgressSummaryCard summary={progress.data.summary} hint={t.progress.hint} />
+      )}
+
       <Card>
         <View style={styles.stats}>
           {duration !== null && (
@@ -206,7 +216,12 @@ function WorkoutDetail({
       </Card>
 
       {type === 'gym' ? (
-        <GymSets sets={gymSets} records={records} units={units} />
+        <GymSets
+          sets={gymSets}
+          records={records}
+          units={units}
+          progress={progress.data?.exercises ?? []}
+        />
       ) : (
         <SwimTimes entries={swimEntries} records={records} />
       )}
@@ -231,10 +246,12 @@ function GymSets({
   sets,
   records,
   units,
+  progress,
 }: {
   sets: GymSetRow[];
   records: PersonalRecordRow[];
   units: DisplayUnits;
+  progress: ExerciseProgressRow[];
 }) {
   const { t, language } = useI18n();
   const exercises = useExercises();
@@ -244,6 +261,7 @@ function GymSets({
   );
   const recordSets = new Set(records.map((record) => record.gym_set_id));
   const groups = groupSetsByExercise(sets);
+  const progressOf = new Map(progress.map((row) => [row.exerciseId, row]));
 
   return (
     <View style={styles.section}>
@@ -253,6 +271,8 @@ function GymSets({
       {groups.length === 0 && <AppText color="muted">{t.workout.noEntries}</AppText>}
       {groups.map((group) => {
         const exercise = byId.get(group.exerciseId);
+        const name = exercise ? exerciseName(exercise, language) : t.templateEditor.unknownExercise;
+        const exerciseProgress = progressOf.get(group.exerciseId);
         return (
           <Card key={group.position}>
             {/* The exercise's name opens its progress screen. */}
@@ -261,18 +281,18 @@ function GymSets({
                 router.push({ pathname: '/exercise/[id]', params: { id: group.exerciseId } })
               }
               accessibilityRole="button"
-              accessibilityLabel={interpolate(t.exercise.open, {
-                name: exercise
-                  ? exerciseName(exercise, language)
-                  : t.templateEditor.unknownExercise,
-              })}
+              accessibilityLabel={interpolate(t.exercise.open, { name })}
               style={({ pressed }) => [styles.exerciseName, pressed && styles.pressed]}
             >
               <AppText variant="heading" style={styles.flex}>
-                {exercise ? exerciseName(exercise, language) : t.templateEditor.unknownExercise}
+                {name}
               </AppText>
               <Icon icon={ChevronRight} size="sm" color="dim" />
             </Pressable>
+            {/* Against the last time, beside the name: the set squares keep their own colours. */}
+            {exerciseProgress && (
+              <ProgressIndicator name={name} progress={exerciseProgress} units={units} />
+            )}
             {group.sets.map((set) => (
               <View
                 key={set.id}

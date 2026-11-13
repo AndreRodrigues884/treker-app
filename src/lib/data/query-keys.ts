@@ -32,6 +32,21 @@ export const queryKeys = {
     ['user', userId, 'exercise', exerciseId, 'progress', from ?? 'all'] as const,
   exerciseHistory: (userId: string, exerciseId: string) =>
     ['user', userId, 'exercise', exerciseId, 'history'] as const,
+  // Statistics and progress: derived from every workout, so any workout change invalidates them.
+  stats: (userId: string) => ['user', userId, 'stats'] as const,
+  workoutProgress: (userId: string, activityId: string) =>
+    ['user', userId, 'stats', 'workout', activityId] as const,
+  templateProgress: (userId: string, templateId: string) =>
+    ['user', userId, 'stats', 'template', templateId] as const,
+  oneRepMaxSeries: (userId: string, exerciseIds: readonly string[], from: string | null) =>
+    ['user', userId, 'stats', 'one-rep-max', exerciseIds.join(','), from ?? 'all'] as const,
+  weeklySummary: (userId: string, from: string | null, to: string) =>
+    ['user', userId, 'stats', 'weekly', from ?? 'all', to] as const,
+  muscleGroupVolume: (userId: string, from: string | null, to: string) =>
+    ['user', userId, 'stats', 'muscle-groups', from ?? 'all', to] as const,
+  templateUsage: (userId: string, from: string | null, to: string) =>
+    ['user', userId, 'stats', 'templates', from ?? 'all', to] as const,
+  exerciseUsage: (userId: string) => ['user', userId, 'stats', 'exercise-usage'] as const,
   exercises: (userId: string) => ['user', userId, 'exercises'] as const,
   templates: (userId: string) => ['user', userId, 'templates'] as const,
   templateList: (userId: string) => ['user', userId, 'templates', 'list'] as const,

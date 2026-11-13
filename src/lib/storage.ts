@@ -11,6 +11,8 @@ export const storageKeys = {
   onboardingDraft: (userId: string) => `treker.onboarding-draft.${userId}`,
   gymSession: (userId: string) => `treker.gym-session.${userId}`,
   restNotificationsAsked: 'treker.rest-notifications-asked',
+  // The exercises the strength chart shows (Statistics), chosen by the athlete.
+  strengthExercises: (userId: string) => `treker.strength-exercises.${userId}`,
 } as const;
 
 export async function readJson(key: string): Promise<unknown> {

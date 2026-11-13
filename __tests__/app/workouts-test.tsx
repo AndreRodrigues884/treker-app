@@ -106,9 +106,16 @@ async function createTemplate(names: string[], name = 'Push A') {
   await screen.findByRole('button', { name: en.workouts.new });
 }
 
-// The card of a saved workout in the list: its accessible name is "Edit <name>, <count>".
+// The card of a saved workout in the list: its accessible name is "Open <name>, <count>".
 const cardName = (name: string, count?: string) =>
-  new RegExp(`^${en.workouts.edit.replace('{name}', name)}, ${count ?? '.+'}$`);
+  new RegExp(`^${en.workouts.open.replace('{name}', name)}, ${count ?? '.+'}$`);
+
+// From the list: the saved workout's screen, then its "Edit".
+async function openEditor(name: string) {
+  await fireEvent.press(await findCard(name));
+  await screen.findByRole('header', { name });
+  await fireEvent.press(screen.getByRole('button', { name: en.savedWorkout.edit }));
+}
 const findCard = (name: string, count?: string) =>
   screen.findByRole('button', { name: cardName(name, count) });
 
@@ -454,16 +461,15 @@ describe('saved workouts', () => {
     ]);
     expect(serverRows('workout_template_exercises')).toHaveLength(2);
 
-    // Editing: same template id and row ids, new name.
-    await fireEvent.press(
-      screen.getByRole('button', {
-        name: new RegExp(`^${en.workouts.edit.replace('{name}', 'Push A')}`),
-      }),
-    );
+    // Editing (list → the saved workout → Edit): same template id and row ids, new name.
+    await openEditor('Push A');
     await screen.findByRole('header', { name: editor.editTitle });
     expect(screen.getByLabelText(editor.name)).toHaveDisplayValue('Push A');
     await fireEvent.changeText(screen.getByLabelText(editor.name), 'Push B');
     await fireEvent.press(screen.getByRole('button', { name: en.common.save }));
+    // Back on the saved workout's screen, with the new name; then the list.
+    await screen.findByRole('header', { name: 'Push B' });
+    await fireEvent.press(screen.getByRole('button', { name: en.common.back }));
     await findCard('Push B');
 
     const edited = savedPayloads()[1];
@@ -651,18 +657,15 @@ describe('leaving the template editor', () => {
   it('a change undone counts as no change; editing a saved workout asks only when it differs', async () => {
     const spy = alert();
     await createTemplate(['Barbell Bench Press']);
-    await fireEvent.press(
-      screen.getByRole('button', {
-        name: new RegExp(`^${en.workouts.edit.replace('{name}', 'Push A')}`),
-      }),
-    );
+    await openEditor('Push A');
     await screen.findByRole('header', { name: editor.editTitle });
 
     await fireEvent.press(screen.getByRole('button', { name: editor.moreSets }));
     await fireEvent.press(screen.getByRole('button', { name: editor.fewerSets }));
     await fireEvent.press(screen.getByRole('button', { name: en.common.back }));
 
-    await screen.findByRole('button', { name: en.workouts.new });
+    // Back on the saved workout's screen without a question.
+    await screen.findByRole('button', { name: en.savedWorkout.edit });
     expect(spy).not.toHaveBeenCalled();
   });
 

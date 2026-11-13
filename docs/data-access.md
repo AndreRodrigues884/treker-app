@@ -31,6 +31,7 @@ Fora dos repositórios, só o login (`src/features/auth/api.ts`) fala com o Supa
 | `exercises` | Listar a biblioteca e os exercícios próprios; criar, editar, eliminar e procurar exercícios próprios |
 | `session` | Gravar uma sessão de ginásio num só pedido (`save_gym_session`); editar um treino gravado num só pedido (`update_gym_session`); a última vez de cada exercício (`last_performance`); os recordes atuais, para o selo de PR na hora |
 | `records` | Os recordes atuais com a série que os deu (`current_gym_records`); as estatísticas de um exercício (`exercise_stats`); os pontos dos gráficos (`exercise_progress`); o histórico de um exercício por páginas (`exercise_history`) |
+| `stats` | O progresso de um treino (`session_progress`) e de um treino guardado (`template_progress`); a série do 1RM dos exercícios escolhidos (`one_rep_max_series`); os totais por semana (`weekly_summary`); o volume por grupo muscular (`volume_by_muscle_group`); os treinos guardados mais feitos (`template_usage`); os exercícios feitos, para a escolha por defeito do gráfico de força (`exercise_stats`) |
 | `templates` | Listar e ler treinos guardados com os seus exercícios; gravar um treino e a sua lista num só pedido (`save_workout_template`); apagar |
 | `profile` | Ler e editar o perfil, concluir o onboarding, apagar a conta |
 
@@ -66,6 +67,7 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 | `['user', id, 'records', 'gym']` | O ecrã de recordes: um recorde por exercício |
 | `['user', id, 'exercise', exercício, …]` | O ecrã de um exercício: `record`, `stats`, `progress` (por intervalo) e `history` (por páginas) |
 | `['user', id, 'records', 'current', 'gym']` | O melhor 1RM atual de cada exercício (selo de PR durante a sessão) |
+| `['user', id, 'stats', …]` | Progresso e estatísticas: `workout` (o progresso de um treino), `template` (o de um treino guardado), `one-rep-max`, `weekly`, `muscle-groups` e `templates` (por intervalo), e `exercise-usage` |
 | `['user', id, 'exercises']` | A biblioteca e os exercícios próprios (frescos 5 min) |
 | `['user', id, 'templates', 'list']` | Os treinos guardados com os seus exercícios |
 | `['user', id, 'templates', 'detail', treino]` | Um treino guardado, no editor |
@@ -74,7 +76,8 @@ Versão 5 (`@tanstack/react-query`), compatível com o React 19 do SDK 58. O cli
 
 - **Depois de cada gravação, invalidam-se as consultas afetadas.**
   - Qualquer escrita de treino (atividade, série ou tempo) passa por `useTrainingMutation` e invalida `['user', id, 'activities']`, que inclui listas, contagens e detalhes. Por exemplo, começar uma atividade atualiza o "Hoje".
-  - Criar ou editar um exercício invalida `['user', id, 'exercises']`; eliminá-lo invalida também `['user', id, 'templates']`; gravar ou apagar um treino invalida `['user', id, 'templates']`.
+  - Criar ou editar um exercício invalida `['user', id, 'exercises']`; eliminá-lo invalida também `['user', id, 'templates']`; gravar ou apagar um treino guardado invalida `['user', id, 'templates']` e `['user', id, 'stats']` (as estatísticas mostram os treinos guardados pelo nome).
+  - Gravar, editar ou apagar um treino invalida `['user', id, 'stats']` inteiro: mudar um treino antigo muda o progresso dos treinos seguintes e todos os totais.
   - Gravar o perfil substitui o perfil em cache pela linha devolvida pelo servidor (`useUpdateProfile`, `useCompleteOnboarding`), por isso a navegação reage logo.
 - **Terminar sessão, apagar a conta ou a sessão expirar limpam a cache toda** (`queryClient.clear()` no `SIGNED_OUT`), para a próxima conta no mesmo telemóvel nunca ver dados da anterior.
 - **Os dados ficam "frescos" 30 s.** Depois disso voltam a ser pedidos quando a app regressa a primeiro plano (`AppState`) ou quando a rede volta (NetInfo), como recomenda a documentação do TanStack Query para React Native.
@@ -103,9 +106,8 @@ flowchart LR
 - **PR na hora:** ao dar uma série como feita, o 1RM estimado é comparado com o recorde atual em cache e com as séries já feitas nesta sessão. É só uma indicação; os recordes oficiais são os que o `save_gym_session` devolve depois de gravar.
 - **Sem duração:** a app não regista quanto tempo dura o treino. Não há relógio na sessão nem duração no resumo, e o pedido leva `ended_at` vazio. Guarda só a hora de início, que dá a data local e a ordem dos treinos do mesmo dia.
 - **Gravar:** o pedido é feito só a partir do rascunho, por isso "Tentar outra vez" envia exatamente o mesmo pedido, com os mesmos ids, e o servidor não duplica nada. Só com sucesso é que o rascunho é apagado.
-- **Temporizador de descanso:** enquanto se descansa, sobe do fundo do ecrã uma folha com uma bola com a contagem decrescente no meio (e um anel que se esvazia), − e + (15 s) de cada lado e "Saltar" centrado por baixo. A folha desce quando o descanso acaba ou é saltado, e a lista da sessão deixa espaço por baixo para as últimas séries continuarem ao alcance. Guarda a hora de fim do descanso, não um contador, por isso está certo depois de a app ir para segundo plano. Uma notificação local (`expo-notifications`) é agendada para essa hora, e aparece também com o ecrã bloqueado, com vibração. É cancelada ao saltar o descanso, ao terminar ou ao descartar o treino.
-  - A permissão é pedida no primeiro treino, com uma frase a explicar porquê. Sem permissão, o temporizador no ecrã funciona na mesma.
-  - As notificações locais funcionam no Expo Go; só as push precisam de uma build de desenvolvimento.
+- **Sem temporizador de descanso, por agora:** a funcionalidade foi pausada. Dar uma série como feita já não inicia o descanso, a sessão não pede a permissão das notificações e não agenda alertas. O código (`rest-timer.tsx`, `rest-notifications.ts` e as funções de descanso em `src/core/session`) fica no projeto para voltar mais tarde; um alerta antigo ainda é cancelado ao terminar ou descartar o treino.
+- **"Terminar"** é um botão a toda a largura, fixo no fundo do ecrã da sessão.
 
 ## Editar e apagar treinos gravados
 
@@ -126,6 +128,31 @@ flowchart LR
 - Usa as cores do tema e os números em Geist Mono. Os pontos que foram recordes ficam na cor dos recordes.
 - Para o leitor de ecrã, o desenho fica escondido e é lido um resumo ("1RM estimado subiu de 100 kg para 116,7 kg, nos últimos 3 meses."), feito a partir de `describeTrend` em `src/core/progress`.
 - Os pontos vêm prontos do Postgres (`exercise_progress`). Os intervalos 3 meses, 1 ano e tudo são calculados por `rangeStart` em `src/core/progress`.
+
+## Progresso e estatísticas
+
+As contas são do Postgres ([database.md](database.md#progresso-e-estatísticas-do-ginásio)); a app só as mostra. A regra de progresso também existe em `src/core/progress` (`workoutMeasures`, `compareProgress`), testada com os mesmos casos.
+
+- **Num treino** (detalhe e "Treino gravado"): no topo, o resumo ("4 de 6 exercícios progrediram"; os exercícios feitos pela primeira vez não contam no total), e ao lado de cada exercício uma seta ↑, = ou ↓ com o valor anterior e o de hoje, a verde, cinzento ou vermelho. Vem do `session_progress`.
+  - A seta e as palavras dizem sempre o resultado, nunca só a cor, e o leitor de ecrã lê "Supino: subiu, de 126,7 kg para 130 kg (1RM estimado)".
+  - O indicador fica ao lado do nome do exercício e nunca pinta os quadrados das séries, que já usam verde, amarelo e vermelho para a dificuldade.
+- **No ecrã de terminar, antes de gravar**, o mesmo resumo e as mesmas setas são calculados no telemóvel (`liveProgress` em `src/core/session`), contra "a última vez" de cada exercício, que vem do `last_performance`. É uma indicação, como o selo de PR na hora; depois de gravar aparece o resultado oficial do `session_progress`.
+- **O ecrã de um treino guardado** (`/template/[id]`, aberto a partir da lista de Treinos e das Estatísticas): o nome, quantas vezes foi feito e a última data, "Começar" e "Editar". Por baixo:
+  - uma faixa com o resultado global dos últimos 8 treinos;
+  - um só gráfico de barras para todos os exercícios: os chips por cima escolhem o exercício, e cada barra é a medida num desses treinos, com uma seta por cima;
+  - tocar numa barra (o "hover" no telemóvel) mostra o valor exato e a data desse treino; ao abrir, mostra o do mais recente. Ao lado fica o melhor das barras.
+
+  `groupTemplateProgress` (`src/core/progress`) agrupa as linhas do `template_progress`. Cada exercício usa a medida do treino mais recente desse exercício e deixa de fora os treinos medidos de outra forma, para as barras serem sempre comparáveis.
+- **O ecrã Estatísticas** (no menu, entre Recordes e Perfil), com um seletor de intervalo: 4 semanas, 3 meses (por defeito), 1 ano ou tudo. `statsRangeStart` dá o início, sempre numa segunda-feira, para a primeira semana ficar inteira.
+  - **Treinos por semana:** barras por semana (de todas as modalidades, porque é o que o objetivo semanal conta), uma linha tracejada com o objetivo do perfil, e a média por semana. A média conta a partir da primeira semana com treinos (`averagePerWeek`), para quem começou há duas semanas não ter a média dividida por um ano.
+  - **Força:** uma linha do 1RM estimado por cada exercício escolhido, até 5, com a pesquisa da biblioteca (`/stats/exercises`).
+    - Por defeito, os exercícios com mais séries (`defaultStrengthExercises`), sem os que não têm 1RM, como a prancha.
+    - A escolha fica guardada no telemóvel, por utilizador (`treker.strength-exercises.<utilizador>`, em `src/features/stats/strength-choice.ts`). Um sexto exercício é recusado com uma mensagem (`toggleStrengthExercise`).
+  - **Volume:** o volume total por semana e o volume por grupo muscular.
+  - **Treinos mais feitos:** os treinos guardados com o número de vezes e a última data; tocar num abre o seu ecrã.
+- **Estados vazios:** cada gráfico sem dados mostra "Faz mais um treino para veres o teu progresso". Uma linha de força precisa de dois treinos.
+- **Leitor de ecrã:** cada gráfico tem um resumo. Por exemplo: "3 treinos nos últimos 3 meses, uma média de 1,5 por semana. O teu objetivo é 3 por semana." As barras de um treino guardado são lidas uma a uma, com a data, o valor e o resultado.
+- Os números estão em Geist Mono e nas unidades do atleta (kg ou lb; segundos para os exercícios em tempo).
 
 ## Sem rede
 
@@ -167,9 +194,18 @@ Antes disso, a Fase 1 guarda o **treino em curso num rascunho no telemóvel** at
   - mudar a data e a hora;
   - apagar um treino, que sai do Perfil e do "Hoje";
   - o ecrã do exercício, com os gráficos resumidos e o histórico por páginas.
+- `__tests__/app/stats-test.tsx`:
+  - as setas e o resumo no detalhe de um treino, e no ecrã de terminar (antes e depois de gravar);
+  - o ecrã do treino guardado: um só gráfico, trocar de exercício e tocar numa barra para ver o valor exato; e o seu estado vazio;
+  - o ecrã Estatísticas no menu;
+  - o seletor de intervalo;
+  - escolher os exercícios do gráfico de força, com o limite de 5;
+  - o volume por grupo muscular;
+  - os estados vazios;
+  - apagar um treino, que atualiza as estatísticas.
 - `__tests__/app/session-test.tsx`:
-  - o fluxo completo, do "+" até ao treino aparecer no Perfil (última vez, PR na hora, descanso e notificação, resumo, gravar, recordes oficiais);
-  - a permissão das notificações;
+  - o fluxo completo, do "+" até ao treino aparecer no Perfil (última vez, PR na hora, sem temporizador de descanso, resumo, gravar, recordes oficiais);
+  - o "Terminar" no fundo do ecrã;
   - retomar depois de a app fechar;
   - o "+" com um treino em curso;
   - descartar;

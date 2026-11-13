@@ -10,7 +10,9 @@ export type ScreenProps = {
   centered?: boolean;
   // Under a navigation header, which already covers the top safe area.
   belowHeader?: boolean;
-  // A floating button over the content (bottom right); the content leaves room for it.
+  // Floating over the content (the "+" button, a bottom bar); the content leaves room for it. It
+  // is placed inside the safe area, so `bottom: 0` sits above the phone's own buttons (Android
+  // navigation bar, iPhone home indicator).
   floating?: ReactNode;
 };
 
@@ -38,17 +40,19 @@ export function Screen({
       style={styles.safeArea}
       edges={belowHeader ? ['bottom', 'left', 'right'] : ['top', 'bottom', 'left', 'right']}
     >
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {content}
-        </ScrollView>
-      ) : (
-        content
-      )}
-      {floating}
+      <View style={styles.body}>
+        {scroll ? (
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {content}
+          </ScrollView>
+        ) : (
+          content
+        )}
+        {floating}
+      </View>
     </SafeAreaView>
   );
 }
@@ -57,6 +61,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  // Inside the safe area's padding: absolute children are placed against this box.
+  body: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,

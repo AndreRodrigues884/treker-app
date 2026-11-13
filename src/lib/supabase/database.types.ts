@@ -675,6 +675,15 @@ export type Database = {
           volume_kg: number;
         }[];
       };
+      one_rep_max_series: {
+        Args: { p_exercise_ids: string[]; p_from?: string };
+        Returns: {
+          activity_id: string;
+          best_one_rep_max_kg: number;
+          exercise_id: string;
+          local_date: string;
+        }[];
+      };
       save_gym_session: {
         Args: { p_session: Json };
         Returns: {
@@ -703,6 +712,48 @@ export type Database = {
         };
       };
       save_workout_template: { Args: { p_template: Json }; Returns: undefined };
+      session_progress: {
+        Args: { p_activity_id: string };
+        Returns: {
+          current_value: number;
+          down_count: number;
+          exercise_id: string;
+          exercise_position: number;
+          first_count: number;
+          measure: string;
+          previous_activity_id: string;
+          previous_date: string;
+          previous_value: number;
+          result: string;
+          same_count: number;
+          session_result: string;
+          up_count: number;
+        }[];
+      };
+      template_progress: {
+        Args: { p_from?: string; p_limit?: number; p_template_id: string };
+        Returns: {
+          activity_id: string;
+          current_value: number;
+          exercise_id: string;
+          exercise_position: number;
+          local_date: string;
+          measure: string;
+          previous_value: number;
+          result: string;
+          session_result: string;
+          started_at: string;
+        }[];
+      };
+      template_usage: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          last_date: string;
+          name: string;
+          template_id: string;
+          workout_count: number;
+        }[];
+      };
       update_gym_session: {
         Args: { p_session: Json };
         Returns: {
@@ -729,6 +780,24 @@ export type Database = {
           isOneToOne: false;
           isSetofReturn: true;
         };
+      };
+      volume_by_muscle_group: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          muscle_group: Database['public']['Enums']['muscle_group'];
+          set_count: number;
+          volume_kg: number;
+          workout_count: number;
+        }[];
+      };
+      weekly_summary: {
+        Args: { p_from: string; p_to: string };
+        Returns: {
+          gym_count: number;
+          volume_kg: number;
+          week_start: string;
+          workout_count: number;
+        }[];
       };
     };
     Enums: {

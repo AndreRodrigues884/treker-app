@@ -18,8 +18,10 @@ import { classifyRequestError } from '@/core/errors';
 import { exerciseName } from '@/core/exercises';
 import { formatWeight } from '@/core/format';
 import { interpolate } from '@/core/i18n';
+import { summarizeProgress } from '@/core/progress';
 import {
   hasDoneSets,
+  liveProgress,
   sessionSummary,
   setOneRepMaxKg,
   toSavePayload,
@@ -32,15 +34,16 @@ import type { ExerciseRow } from '@/features/exercises/repository';
 import { useExercises } from '@/features/exercises/queries';
 import { useSaveGymSession, useSessionActions } from '@/features/session/queries';
 import { getActiveSession, useActiveSession } from '@/features/session/session-store';
+import { ProgressIndicator, ProgressSummaryCard } from '@/features/stats/progress-indicator';
+import { useWorkoutProgress } from '@/features/stats/queries';
 import { useI18n } from '@/lib/i18n';
 import { accentTints, colors, radii, sizes, spacing, typography } from '@/theme';
 
 /**
- * Finishing the workout: its sets, volume, exercises and records (its duration is not recorded), a
- * title (the saved workout's name by default, kept in the draft as it is typed). "Save" sends it
- * in one request; only then
- * is the draft deleted and the official records shown. If it fails, the draft stays for
- * "Try again".
+ * Finishing the workout: its sets, volume, exercises, records and progress against last time (its
+ * duration is not recorded), and a title (the saved workout's name by default, kept in the draft as
+ * it is typed). "Save" sends it in one request; only then is the draft deleted and the official
+ * records and progress (session_progress) shown. If it fails, the draft stays for "Try again".
  */
 export default function FinishScreen() {
   const { t } = useI18n();
@@ -55,7 +58,7 @@ export default function FinishScreen() {
 
   // Saved: the draft is gone; show what the server recorded.
   if (save.isSuccess) {
-    return <Saved records={save.data} byId={byId} />;
+    return <Saved records={save.data} activityId={save.variables.id} byId={byId} />;
   }
   if (!session) {
     return (
@@ -97,6 +100,14 @@ function FinishForm({
     save.mutate(toSavePayload(current));
   };
 
+  // Each exercise with done sets against last time, with the shared rule (an indication: the
+  // official result comes after saving).
+  const progress = session.exercises.flatMap((exercise) => {
+    const result = liveProgress(session, exercise);
+    return result ? [{ exercise, progress: result }] : [];
+  });
+  const progressSummary = summarizeProgress(progress.map((item) => item.progress.result));
+
   const livePrs = session.exercises.flatMap((exercise) =>
     exercise.sets
       .filter((set) => set.done && set.pr)
@@ -128,6 +139,26 @@ function FinishForm({
             <Stat label={t.session.exercises} value={String(summary.exerciseCount)} />
           </View>
         </Card>
+
+        {progress.length > 0 && (
+          <>
+            <ProgressSummaryCard summary={progressSummary} hint={t.progress.liveHint} />
+            <Card>
+              <View style={styles.section}>
+                {progress.map(({ exercise, progress: result }) => (
+                  <View key={exercise.key} style={styles.progressItem}>
+                    <AppText>{nameOf(exercise.id)}</AppText>
+                    <ProgressIndicator
+                      name={nameOf(exercise.id)}
+                      progress={result}
+                      units={{ weight: unit, language }}
+                    />
+                  </View>
+                ))}
+              </View>
+            </Card>
+          </>
+        )}
 
         {livePrs.length > 0 && (
           <View style={styles.section}>
@@ -215,15 +246,19 @@ function FinishForm({
 // best it beat), then "Done" back to Today.
 function Saved({
   records,
+  activityId,
   byId,
 }: {
   records: PersonalRecordRow[];
+  activityId: string;
   byId: Map<string, ExerciseRow>;
 }) {
   const { t, language } = useI18n();
   const { profile } = useAuth();
   const unit = profile?.weight_unit ?? 'kg';
   const hasRecords = records.length > 0;
+  // The official progress, now that the workout is on the server.
+  const progress = useWorkoutProgress(activityId);
   const weight = (kg: number) => formatWeight(fromKilograms(kg, unit), unit, language);
 
   return (
@@ -271,6 +306,32 @@ function Saved({
           <AppText color="muted" align="center">
             {t.session.noNewRecords}
           </AppText>
+        )}
+
+        {progress.data && progress.data.exercises.length > 0 && (
+          <View style={styles.records}>
+            <ProgressSummaryCard summary={progress.data.summary} hint={t.progress.hint} />
+            <Card>
+              <View style={styles.section}>
+                {progress.data.exercises.map((row) => {
+                  const exercise = byId.get(row.exerciseId);
+                  const name = exercise
+                    ? exerciseName(exercise, language)
+                    : t.templateEditor.unknownExercise;
+                  return (
+                    <View key={row.exerciseId} style={styles.progressItem}>
+                      <AppText>{name}</AppText>
+                      <ProgressIndicator
+                        name={name}
+                        progress={row}
+                        units={{ weight: unit, language }}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+          </View>
         )}
 
         <View style={styles.done}>
@@ -369,6 +430,10 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing[2],
+  },
+  progressItem: {
+    gap: spacing[1],
+    paddingVertical: spacing[1],
   },
   record: {
     flexDirection: 'row',

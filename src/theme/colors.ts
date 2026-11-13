@@ -34,11 +34,43 @@ export const colors = {
   warningTint: 'rgba(251, 191, 36, 0.14)',
   dangerTint: 'rgba(248, 113, 113, 0.14)',
 
+  // Chart colours, so each muscle group and each exercise has its own (Statistics).
+  chartOrange: '#F97316',
+  chartBlue: '#3B82F6',
+  chartGreen: '#10B981',
+  chartPurple: '#A855F7',
+  chartPink: '#EC4899',
+  chartCyan: '#06B6D4',
+  chartAmber: '#F59E0B',
+  chartRed: '#EF4444',
+  chartTeal: '#14B8A6',
+  chartLime: '#84CC16',
+  chartIndigo: '#6366F1',
+  chartRose: '#FB7185',
+  // The empty part of a bar.
+  track: '#24324F',
+
   // Dims the screen behind a dialog (bg at 80%).
   scrim: 'rgba(7, 13, 28, 0.8)',
 } as const;
 
 export type ColorToken = keyof typeof colors;
+
+// The order chart series take their colours in.
+export const chartPalette: ColorToken[] = [
+  'chartAmber',
+  'chartBlue',
+  'chartGreen',
+  'chartPink',
+  'chartPurple',
+  'chartOrange',
+  'chartCyan',
+  'chartRed',
+  'chartTeal',
+  'chartLime',
+  'chartIndigo',
+  'chartRose',
+];
 
 export type AccentTone = 'gym' | 'swim' | 'record' | 'positive' | 'warning' | 'danger';
 

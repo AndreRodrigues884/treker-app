@@ -6,6 +6,7 @@ import {
   elapsedS,
   hasDoneSets,
   lastTimeAt,
+  liveProgress,
   minPlanSets,
   moveExercise,
   parseSession,
@@ -322,6 +323,45 @@ describe('live records', () => {
     expect(
       setOneRepMaxKg({ weightUnit: 'lb', bodyweightKg: null }, bench, { weight: 225, reps: 1 }),
     ).toBe(102.06);
+  });
+});
+
+describe('live progress (finish screen)', () => {
+  it('compares the done sets with last time, with the shared rule', () => {
+    let session = pushDay();
+    const key = benchKey(session);
+    const [first, second] = session.exercises[0]!.sets;
+    // Last time: best 97.5 x 6 = 117 kg. Today 100 x 5 = 116.67: less than 0.5% lower.
+    session = saveSet(session, key, first!.id, values(), START, {});
+    expect(liveProgress(session, session.exercises[0]!)).toEqual({
+      measure: 'one_rep_max',
+      current: 116.67,
+      previous: 117,
+      result: 'same',
+    });
+    // 105 x 5 = 122.5: up.
+    session = saveSet(session, key, second!.id, values({ weight: 105 }), START, {});
+    expect(liveProgress(session, session.exercises[0]!)?.result).toBe('up');
+  });
+
+  it('a first time without last time, and nothing without done sets', () => {
+    let session = pushDay();
+    const plankKey = session.exercises[1]!.key;
+    expect(liveProgress(session, session.exercises[1]!)).toBeNull();
+    session = saveSet(
+      session,
+      plankKey,
+      setAt(session, 1, 0).id,
+      values({ weight: null, reps: null, seconds: 50 }),
+      START,
+      {},
+    );
+    expect(liveProgress(session, session.exercises[1]!)).toEqual({
+      measure: 'duration',
+      current: 50,
+      previous: null,
+      result: 'first',
+    });
   });
 });
 

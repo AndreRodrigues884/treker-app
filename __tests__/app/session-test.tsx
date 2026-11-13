@@ -103,8 +103,8 @@ beforeEach(async () => {
   await resetStorage();
 });
 
-// "+" → Gym → Push A, then answers the notifications question.
-async function startPushA(allowNotifications = true) {
+// "+" → Gym → Push A.
+async function startPushA() {
   await renderApp('/');
   await fireEvent.press(await screen.findByRole('button', { name: en.nav.start }));
   await fireEvent.press(await screen.findByRole('radio', { name: en.onboarding.sports.gym }));
@@ -112,9 +112,6 @@ async function startPushA(allowNotifications = true) {
     await screen.findByRole('radio', { name: `Push A. ${en.workouts.exerciseCountOne}` }),
   );
   await screen.findByRole('header', { name: 'Push A' });
-  await fireEvent.press(
-    await screen.findByRole('button', { name: allowNotifications ? s.allow : s.notNow }),
-  );
 }
 
 // A set's square ("Set 1, not done", "Set 1, done, Easy, …"), and the open set's fields.
@@ -175,17 +172,10 @@ describe('a gym session from start to the Profile', () => {
     ).toBeOnTheScreen();
     expect(screen.getByLabelText('1 of 3 sets done')).toBeOnTheScreen();
 
-    // The rest timer started (90 s) and the alert is scheduled for its end.
-    expect(await screen.findByLabelText(s.restLeft.replace('{time}', '1:30'))).toBeOnTheScreen();
-    await waitFor(() => expect(scheduled.size).toBe(1));
-    const [alert] = [...scheduled.values()];
-    expect(alert!.content.title).toBe(s.restOverTitle);
-    expect(alert!.date.getTime() - Date.now()).toBeGreaterThan(85_000);
-
-    // Skipping cancels it.
-    await fireEvent.press(screen.getByRole('button', { name: s.skipRest }));
-    await waitFor(() => expect(scheduled.size).toBe(0));
+    // No rest timer for now: nothing on screen, no question, no alert.
     expect(screen.queryByLabelText(/^Rest: /)).not.toBeOnTheScreen();
+    expect(screen.queryByText(s.permissionBody)).not.toBeOnTheScreen();
+    expect(scheduled.size).toBe(0);
 
     // The draft is on the phone the whole time.
     expect((await storedDraft()).exercises[0].sets[0]).toMatchObject({
@@ -242,16 +232,12 @@ describe('a gym session from start to the Profile', () => {
     ).toBeOnTheScreen();
   });
 
-  it('asks for the notifications permission once, with a reason, and works without it', async () => {
-    await startPushA(false);
-    expect(screen.queryByText(s.permissionBody)).not.toBeOnTheScreen();
-    expect(await AsyncStorage.getItem(storageKeys.restNotificationsAsked)).toBe('true');
-
-    await doSet(1);
-
-    // The timer on screen still runs; no alert is scheduled.
-    expect(await screen.findByLabelText(s.restLeft.replace('{time}', '1:30'))).toBeOnTheScreen();
-    expect(scheduled.size).toBe(0);
+  it('"Finish" is across the bottom of the screen', async () => {
+    await startPushA();
+    const finish = screen.getByRole('button', { name: s.finish });
+    expect(finish).toBeOnTheScreen();
+    await fireEvent.press(finish);
+    expect(await screen.findByRole('header', { name: s.finishTitle })).toBeOnTheScreen();
   });
 
   it('says what is missing instead of marking an empty set as done', async () => {

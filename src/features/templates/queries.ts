@@ -28,7 +28,12 @@ function useTemplateWrite<Input>(write: (input: Input) => Promise<void>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: write,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.templates(ctx.userId) }),
+    // The statistics list saved workouts by name, and leave deleted ones out.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.templates(ctx.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats(ctx.userId) }),
+      ]),
   });
 }
 

@@ -13,7 +13,8 @@ import { useI18n } from '@/lib/i18n';
 import { fontFamilies, opacity, sizes, spacing } from '@/theme';
 
 // "Workouts": the saved workouts, one line each with the name and how many exercises. Tap one to
-// edit it; the red bin deletes it (after a confirmation). The exercise library opens from here.
+// open its screen (progress, Start, Edit); the red bin deletes it (after a confirmation). The
+// exercise library opens from here.
 export default function WorkoutsScreen() {
   const { t } = useI18n();
   const ctx = useDataContext();
@@ -76,7 +77,7 @@ export default function WorkoutsScreen() {
             name={template.name}
             exerciseCount={exercises.length}
             confirmingDelete={confirmingDelete === template.id}
-            onOpen={() => router.push({ pathname: '/templates/[id]', params: { id: template.id } })}
+            onOpen={() => router.push({ pathname: '/template/[id]', params: { id: template.id } })}
             onAskDelete={() => setConfirmingDelete(template.id)}
             onCancelDelete={() => setConfirmingDelete(null)}
             onDelete={() =>
@@ -123,7 +124,7 @@ function TemplateCard({
         <Pressable
           onPress={onOpen}
           accessibilityRole="button"
-          accessibilityLabel={`${interpolate(t.workouts.edit, { name })}, ${count}`}
+          accessibilityLabel={`${interpolate(t.workouts.open, { name })}, ${count}`}
           style={({ pressed }) => [styles.summary, pressed && styles.pressed]}
         >
           <AppText variant="heading" numberOfLines={2}>

@@ -1,6 +1,7 @@
 import { Drawer } from 'expo-router/drawer';
 import {
   CalendarDays,
+  ChartLine,
   ClipboardList,
   House,
   Trophy,
@@ -55,6 +56,10 @@ export default function DrawerLayout() {
       <Drawer.Screen
         name="records"
         options={{ title: t.nav.records, drawerIcon: drawerIcon(Trophy) }}
+      />
+      <Drawer.Screen
+        name="stats"
+        options={{ title: t.nav.stats, drawerIcon: drawerIcon(ChartLine) }}
       />
       <Drawer.Screen
         name="profile"

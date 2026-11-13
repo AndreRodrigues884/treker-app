@@ -70,7 +70,8 @@ export function useExerciseHistory(exerciseId: string) {
 
 /**
  * After a workout is saved, edited or deleted: its detail, the workout lists and counts (Today,
- * Profile), "last time", the records, and the screens of the exercises it touched.
+ * Profile), "last time", the records, the statistics and progress (a change in an old workout
+ * changes the progress of the later ones), and the screens of the exercises it touched.
  */
 export async function invalidateWorkoutChange(
   queryClient: QueryClient,
@@ -80,6 +81,7 @@ export async function invalidateWorkoutChange(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.activities(userId) }),
     queryClient.invalidateQueries({ queryKey: queryKeys.records(userId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats(userId) }),
     ...[...new Set(exerciseIds)].map((exerciseId) =>
       queryClient.invalidateQueries({ queryKey: queryKeys.exercise(userId, exerciseId) }),
     ),

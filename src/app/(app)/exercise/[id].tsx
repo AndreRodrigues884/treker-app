@@ -1,11 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ChevronRight, Pencil, Trophy } from 'lucide-react-native';
+import { ArrowLeft, Pencil, Trophy } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import {
   AppText,
-  Badge,
   Button,
   Card,
   Chip,
@@ -28,27 +27,24 @@ import {
 import { interpolate } from '@/core/i18n';
 import { describeTrend, PROGRESS_RANGES, rangeStart, type ProgressRange } from '@/core/progress';
 import { fromKilograms } from '@/core/units';
-import { setText, workoutTitle, type DisplayUnits } from '@/features/activities/labels';
+import { setText, type DisplayUnits } from '@/features/activities/labels';
 import { useAuth } from '@/features/auth/auth-provider';
 import { exerciseMeta } from '@/features/exercises/labels';
 import { useExercises } from '@/features/exercises/queries';
-import type { HistoryEntry, ProgressPoint } from '@/features/records/repository';
+import type { ProgressPoint } from '@/features/records/repository';
 import {
-  useExerciseHistory,
   useExerciseProgress,
   useExerciseRecord,
   useExerciseStats,
 } from '@/features/records/queries';
-import { difficultyLabel, difficultyTone } from '@/features/session/difficulty';
 import { getDeviceTimezone } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
-import { colors, opacity, sizes, spacing } from '@/theme';
+import { spacing } from '@/theme';
 
 /**
  * One exercise: its current record (estimated 1RM and the set that gave it), its stats, charts of
- * the best 1RM and the volume of each workout (3 months, 1 year or everything; records marked),
- * and its history by workout, one page at a time. Opened from the library, a workout, the session
- * and the records screen.
+ * the best 1RM and the volume of each workout (3 months, 1 year or everything; records marked).
+ * Opened from the library, a workout, the session and the records screen.
  */
 export default function ExerciseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -102,7 +98,6 @@ export default function ExerciseScreen() {
           today={today}
           showOneRepMax={exercise ? exercise.unit === 'reps' && exercise.tracks_load : true}
         />
-        <History exerciseId={id} units={units} today={today} />
       </View>
     </Screen>
   );
@@ -316,103 +311,6 @@ function Charts({
   );
 }
 
-function History({
-  exerciseId,
-  units,
-  today,
-}: {
-  exerciseId: string;
-  units: DisplayUnits;
-  today: string;
-}) {
-  const { t } = useI18n();
-  const history = useExerciseHistory(exerciseId);
-  const entries = history.data?.pages.flat() ?? [];
-
-  return (
-    <View style={styles.section}>
-      <AppText variant="heading" accessibilityRole="header">
-        {t.exercise.history}
-      </AppText>
-      {history.isError && (
-        <ErrorNotice
-          message={t.common.errors[classifyRequestError(history.error)]}
-          network={classifyRequestError(history.error) === 'network'}
-          onRetry={() => history.refetch()}
-          retryLabel={t.common.retry}
-          retrying={history.isFetching}
-        />
-      )}
-      {history.isSuccess && entries.length === 0 && (
-        <AppText color="muted">{t.exercise.noHistory}</AppText>
-      )}
-      {entries.map((entry) => (
-        <HistoryRow key={entry.activityId} entry={entry} units={units} today={today} />
-      ))}
-      {history.hasNextPage && (
-        <Button
-          label={t.workout.showMore}
-          variant="secondary"
-          fullWidth
-          loading={history.isFetchingNextPage}
-          onPress={() => history.fetchNextPage()}
-        />
-      )}
-    </View>
-  );
-}
-
-function HistoryRow({
-  entry,
-  units,
-  today,
-}: {
-  entry: HistoryEntry;
-  units: DisplayUnits;
-  today: string;
-}) {
-  const { t } = useI18n();
-  const date = formatLocalDate(entry.localDate, units.language, today);
-  const title = workoutTitle(t, 'gym', entry.title);
-  const sets = entry.sets.map((set) =>
-    setText({ weight_kg: set.weightKg, reps: set.reps, duration_s: set.durationS }, units),
-  );
-
-  return (
-    <Pressable
-      onPress={() =>
-        router.push({ pathname: '/activities/[id]', params: { id: entry.activityId } })
-      }
-      accessibilityRole="button"
-      accessibilityLabel={`${interpolate(t.exercise.openWorkout, { date })}, ${title}, ${entry.sets
-        .map(
-          (set, index) =>
-            `${sets[index]}${set.difficulty ? ` ${difficultyLabel(t, set.difficulty)}` : ''}`,
-        )
-        .join(', ')}`}
-      style={({ pressed }) => [styles.historyRow, pressed && styles.pressed]}
-    >
-      <View style={styles.historyText}>
-        <AppText variant="caption" color="muted">
-          {`${date} · ${title}`}
-        </AppText>
-        {entry.sets.map((set, index) => (
-          <View key={set.id} style={styles.historySet}>
-            <AppText variant="numeric">{sets[index]}</AppText>
-            {set.difficulty && (
-              <Badge
-                label={difficultyLabel(t, set.difficulty)}
-                tone={difficultyTone[set.difficulty]}
-              />
-            )}
-          </View>
-        ))}
-      </View>
-      <Icon icon={ChevronRight} size="sm" color="dim" />
-    </Pressable>
-  );
-}
-
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat} accessible accessibilityLabel={`${label}: ${value}`}>
@@ -454,27 +352,6 @@ const styles = StyleSheet.create({
   },
   ranges: {
     flexDirection: 'row',
-    gap: spacing[2],
-  },
-  historyRow: {
-    minHeight: sizes.control,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing[3],
-    paddingVertical: spacing[3],
-    borderBottomWidth: sizes.border,
-    borderBottomColor: colors.divider,
-  },
-  pressed: {
-    opacity: opacity.pressed,
-  },
-  historyText: {
-    flex: 1,
-    gap: spacing[1],
-  },
-  historySet: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing[2],
   },
 });
